@@ -1,0 +1,12 @@
+todos.json
+.gh-token
+venv/
+build/
+dist/
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+.update/
+backups/
+com.ocean.*.plist

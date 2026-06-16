@@ -1,0 +1,1699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>每日待办</title>
+<style>
+  :root {
+    --bg: #fbfaf7;
+    --surface: #ffffff;
+    --line: #ececea;
+    --line-soft: #f3f2ef;
+    --text: #1f1f1f;
+    --text-2: #5f5f5d;
+    --muted: #a0a09e;
+    --accent: #0f766e;
+    --hover: rgba(0,0,0,0.025);
+    --p0: #dc2626;
+    --p1: #ea580c;
+    --p2: #ca8a04;
+    --p3: #9ca3af;
+    --pn: #cbcbc8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg); color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    padding: 28px;
+    font-size: 14px;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+
+  header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 22px; padding: 0 4px;
+  }
+  h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  h1 .total { color: var(--muted); font-weight: 400; margin-left: 10px; font-size: 13px; }
+  .meta { font-size: 11px; color: var(--muted); }
+
+  /* 添加栏 —— 极简，只留输入和右侧两小下拉 */
+  .add {
+    display: flex; align-items: flex-end; gap: 6px;
+    background: var(--surface); border: 1px solid var(--line);
+    padding: 10px 12px; border-radius: 10px;
+    margin-bottom: 32px;
+    transition: border-color 0.15s;
+  }
+  .add:focus-within { border-color: var(--accent); }
+  .add textarea {
+    flex: 1; border: none; outline: none; font-size: 14px;
+    background: transparent; color: var(--text);
+    resize: none; min-height: 20px; max-height: 160px;
+    font-family: inherit; line-height: 1.5;
+    overflow-y: auto;
+    padding: 0;
+  }
+  .add textarea::placeholder { color: var(--muted); }
+  .add select {
+    appearance: none; -webkit-appearance: none;
+    border: none; background: transparent; outline: none;
+    font-size: 12px; color: var(--text-2);
+    cursor: pointer; padding: 3px 6px; border-radius: 4px;
+    font-family: inherit;
+  }
+  .add select:hover { background: var(--hover); }
+  .add #addBtn {
+    background: var(--accent); color: white; border: none;
+    padding: 6px 14px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; font-weight: 500;
+    margin-left: 4px;
+  }
+  .add #addBtn:hover { opacity: 0.92; }
+
+  /* 分组段落 */
+  .group { margin-bottom: 28px; }
+  .group-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 0 4px 6px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 2px;
+  }
+  .group-head .pri-dot {
+    width: 8px; height: 8px; border-radius: 50%; align-self: center;
+  }
+  .group-head .label {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+  .group-head .label-cn { font-size: 13px; color: var(--text-2); font-weight: 500; margin-left: -4px; }
+  .group-head .count {
+    margin-left: auto; font-size: 12px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .group.P0 .pri-dot { background: var(--p0); }   .group.P0 .label { color: var(--p0); }
+  .group.P1 .pri-dot { background: var(--p1); }   .group.P1 .label { color: var(--p1); }
+  .group.P2 .pri-dot { background: var(--p2); }   .group.P2 .label { color: var(--p2); }
+  .group.P3 .pri-dot { background: var(--p3); }   .group.P3 .label { color: var(--p3); }
+  .group.PN .pri-dot { background: var(--pn); }   .group.PN .label { color: var(--text-2); }
+  .group.DN .pri-dot { background: var(--pn); }   .group.DN .label { color: var(--muted); font-weight: 500; }
+
+  /* 可折叠分组 */
+  .group-head.collapsible { cursor: pointer; user-select: none; }
+  .group-head.collapsible:hover { background: var(--hover); border-radius: 4px; }
+  .group-head .toggle {
+    font-size: 10px; color: var(--muted);
+    transition: transform 0.15s; display: inline-block;
+    margin-left: 4px;
+  }
+  .group.collapsed .toggle { transform: rotate(-90deg); }
+  .group.collapsed > ul { display: none; }
+
+  /* 任务行 */
+  ul { list-style: none; }
+  li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--line-soft);
+    transition: background-color 0.1s;
+    border-radius: 4px;
+  }
+  li:last-child { border-bottom: none; }
+  li:hover { background: var(--hover); }
+  li.done .text { text-decoration: line-through; color: var(--muted); }
+  li.done { opacity: 0.7; }
+  li.auto-skipped { opacity: 0.5; }
+  li.auto-skipped .meta-cell { color: #b9a35a; }
+
+  input[type=checkbox] {
+    width: 16px; height: 16px; cursor: pointer;
+    accent-color: var(--accent);
+    flex-shrink: 0;
+  }
+  .text {
+    flex: 1; font-size: 14px; line-height: 1.45;
+    outline: none;
+    min-width: 0; word-break: break-word;
+  }
+  .text[contenteditable=true]:focus {
+    background: white; box-shadow: 0 0 0 1px var(--accent);
+    border-radius: 4px; padding: 0 4px;
+  }
+
+  /* 行尾元数据 —— 全部纯灰文字 */
+  .meta-cell {
+    font-size: 12px; color: var(--muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .sep { color: var(--line); margin: 0 6px; user-select: none; }
+
+  /* 右侧 hover 工具栏（priority 切换 + 删除）*/
+  .actions {
+    display: flex; align-items: center; gap: 4px;
+    opacity: 0; transition: opacity 0.15s;
+  }
+  li:hover .actions { opacity: 1; }
+  .pri-select {
+    appearance: none; -webkit-appearance: none;
+    border: 1px solid var(--line); background: var(--surface);
+    border-radius: 4px; padding: 2px 6px;
+    font-size: 11px; font-weight: 600; cursor: pointer;
+    font-family: inherit; outline: none; color: var(--text-2);
+    min-width: 38px; text-align: center;
+  }
+  .pri-select.P0 { color: var(--p0); border-color: var(--p0); }
+  .pri-select.P1 { color: var(--p1); border-color: var(--p1); }
+  .pri-select.P2 { color: var(--p2); border-color: var(--p2); }
+  .pri-select.P3 { color: var(--p3); border-color: var(--p3); }
+  .pri-select.PN { color: var(--muted); }
+  .pri-select option { color: var(--text); background: white; }
+  .del {
+    background: transparent; border: none; color: var(--muted);
+    cursor: pointer; font-size: 16px; padding: 0 4px;
+    line-height: 1;
+  }
+  .del:hover { color: #dc2626; }
+  /* 建议行：✓采纳 / ✕拒绝（审阅动作，非"完成"）—— 始终可见，区别于普通行的完成 checkbox */
+  .accept-lead {
+    flex-shrink: 0;
+    border: 1px solid #16a34a; background: #f0fdf4; color: #16a34a;
+    border-radius: 5px; padding: 3px 9px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: inherit; line-height: 1; white-space: nowrap;
+  }
+  .accept-lead:hover { background: #16a34a; color: #fff; }
+  li.suggest .actions { opacity: 1; }   /* 采纳/拒绝不藏 hover */
+  .del.reject { font-size: 12px; padding: 3px 6px; white-space: nowrap; }
+
+  /* note 背景说明（claude-suggest 建议常驻显示）*/
+  .text-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .text-wrap .text { flex: none; }
+  .note {
+    font-size: 12px; color: var(--text-2); line-height: 1.45;
+    border-left: 2px solid var(--line); padding-left: 8px;
+  }
+
+  /* 💡 Claude 建议组 */
+  .group.SG {
+    background: #fdf9f0; border: 1px solid #f0e4c8;
+    border-radius: 8px; padding: 14px 16px; margin-bottom: 28px;
+  }
+  .group.SG .pri-dot { background: #d9a441; }
+  .group.SG .label { color: #d9a441; }
+
+  .empty {
+    color: var(--muted); padding: 12px 4px; font-size: 13px;
+    font-style: italic;
+  }
+  footer {
+    margin-top: 24px; font-size: 11px; color: var(--muted);
+    text-align: center;
+  }
+
+  /* === toast 反馈 === */
+  .toast {
+    position: fixed; bottom: 32px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(31,31,31,0.92); color: white;
+    padding: 10px 18px; border-radius: 8px;
+    font-size: 13px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.25);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 200;
+    min-width: 220px;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast .toast-text { display: block; }
+  .toast .toast-progress {
+    height: 4px; background: rgba(255,255,255,0.2);
+    border-radius: 2px; margin-top: 6px; overflow: hidden;
+    display: none;
+  }
+  .toast.with-progress .toast-progress { display: block; }
+  .toast .toast-bar {
+    height: 100%; background: #22c1a3;
+    width: 0%; transition: width 0.25s;
+  }
+
+  /* === 更新提示 banner === */
+  .update-banner {
+    display: none;
+    background: linear-gradient(135deg, #0f766e 0%, #115e59 100%);
+    color: white;
+    padding: 10px 16px; border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    align-items: center; gap: 12px;
+    box-shadow: 0 2px 8px rgba(15,118,110,0.25);
+  }
+  .update-banner.show { display: flex; }
+  .update-banner .ub-text { flex: 1; }
+  .update-banner .ub-ver { font-weight: 700; }
+  .update-banner .ub-btn {
+    background: white; color: var(--accent);
+    border: none; padding: 5px 12px; border-radius: 5px;
+    cursor: pointer; font-weight: 600; font-size: 12px;
+  }
+  .update-banner .ub-btn:hover { opacity: 0.92; }
+  .update-banner .ub-close {
+    background: transparent; border: none;
+    color: white; opacity: 0.7;
+    cursor: pointer; font-size: 18px; line-height: 1;
+    padding: 0 4px;
+  }
+  .update-banner .ub-close:hover { opacity: 1; }
+
+  /* === 头部按钮 === */
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .btn-icon {
+    background: transparent; border: 1px solid var(--line);
+    color: var(--text-2); padding: 4px 10px;
+    border-radius: 6px; cursor: pointer; font-size: 12px;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .btn-icon:hover { background: var(--hover); color: var(--text); border-color: var(--text-2); }
+
+  /* === 模态框 === */
+  .modal { position: fixed; inset: 0; z-index: 100; display: none; }
+  .modal.show { display: block; }
+  .modal-bg {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.32);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .modal-card {
+    position: relative; max-width: 820px; margin: 5vh auto;
+    background: var(--surface); border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+    padding: 22px 26px 26px;
+    max-height: 90vh; overflow-y: auto;
+  }
+  .modal-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 22px;
+  }
+  .modal-head h2 {
+    font-size: 16px; font-weight: 600;
+    margin-right: auto;
+  }
+  .modal-head .week-label {
+    font-size: 14px; color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+    min-width: 200px; text-align: center;
+  }
+  .modal-head .nav-btn {
+    background: transparent; border: 1px solid var(--line);
+    width: 28px; height: 28px; border-radius: 6px;
+    cursor: pointer; color: var(--text-2);
+    font-size: 14px; line-height: 1;
+  }
+  .modal-head .nav-btn:hover:not(:disabled) {
+    background: var(--hover); color: var(--text);
+  }
+  .modal-head .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .modal-head .this-week {
+    font-size: 12px; padding: 4px 10px;
+    background: transparent; border: 1px solid var(--line);
+    border-radius: 6px; cursor: pointer; color: var(--text-2);
+  }
+  .modal-head .close {
+    background: transparent; border: none;
+    font-size: 22px; cursor: pointer; color: var(--muted);
+    line-height: 1; padding: 0 6px;
+  }
+  .modal-head .close:hover { color: var(--text); }
+
+  /* === Excel 风周表 === */
+  .review-table {
+    width: 100%; border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 13px;
+    table-layout: fixed;
+  }
+  .review-table td {
+    border: 1px solid var(--line);
+    padding: 12px 14px;
+    vertical-align: top;
+    width: 33.33%;
+  }
+  .review-table .summary-row td {
+    text-align: center;
+    font-size: 15px; font-weight: 600;
+    background: var(--bg);
+    padding: 14px;
+    color: var(--text);
+  }
+  .review-table .summary-row .summary-num {
+    color: var(--accent); margin: 0 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .review-table .day-cell { min-height: 110px; height: 110px; }
+  .review-table .day-cell.today { background: rgba(15,118,110,0.04); }
+  .review-table .day-cell.future { background: var(--bg); opacity: 0.5; }
+  .review-table .day-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .review-table .day-head .dow {
+    font-weight: 600; color: var(--text);
+  }
+  .review-table .day-head .ddate {
+    font-size: 11px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .review-table .day-head .dcount {
+    font-size: 11px; color: var(--muted);
+  }
+  .review-table .day-cell.today .day-head .dow { color: var(--accent); }
+  .review-table .day-cell ul { list-style: none; padding: 0; }
+  .review-table .day-cell li {
+    display: flex; gap: 6px; align-items: baseline;
+    padding: 3px 0; font-size: 12px;
+    line-height: 1.45;
+    border: none;
+  }
+  .review-table .day-cell li:hover { background: transparent; }
+  .review-table .day-cell .check {
+    color: var(--accent); flex-shrink: 0; font-size: 11px;
+  }
+  .review-table .day-cell .task-text {
+    flex: 1; color: var(--text); word-break: break-word;
+  }
+  .review-table .day-cell .task-pri {
+    font-size: 10px; font-weight: 700;
+    margin-right: 2px;
+  }
+  .review-table .day-cell .task-pri.P0 { color: var(--p0); }
+  .review-table .day-cell .task-pri.P1 { color: var(--p1); }
+  .review-table .day-cell .task-pri.P2 { color: var(--p2); }
+  .review-table .day-cell .task-pri.P3 { color: var(--p3); }
+  .review-table .day-cell .task-time {
+    font-size: 10px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .review-table .day-cell .empty-hint {
+    color: var(--muted); font-size: 12px; font-style: italic;
+  }
+  .review-table .day-cell.future .empty-hint::before { content: "—"; }
+
+  /* === 日期触发按钮（替代 input[type=date]） === */
+  .due-btn {
+    border: 1px solid var(--line); background: var(--surface);
+    border-radius: 6px; padding: 5px 12px;
+    font-size: 13px; color: var(--text);
+    font-family: inherit; cursor: pointer; outline: none;
+    display: inline-flex; align-items: center; gap: 4px;
+    white-space: nowrap;
+  }
+  .due-btn:hover { border-color: var(--accent); background: var(--hover); }
+  .due-btn.active { border-color: var(--accent); color: var(--accent); }
+  .due-btn-sm { font-size: 11px; padding: 3px 8px; }
+
+  /* === 自定义日期选择器 popover === */
+  .date-picker {
+    position: absolute; z-index: 300;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 10px 32px rgba(0,0,0,0.18);
+    padding: 14px;
+    width: 300px;
+    font-size: 13px;
+  }
+  .dp-head {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 10px;
+  }
+  .dp-title {
+    flex: 1; text-align: center;
+    font-weight: 600; font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+  .dp-nav {
+    background: transparent; border: 1px solid var(--line);
+    width: 28px; height: 28px; border-radius: 6px;
+    cursor: pointer; color: var(--text-2);
+    font-size: 14px; line-height: 1; padding: 0;
+    font-family: inherit;
+  }
+  .dp-nav:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+  .dp-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .dp-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 2px; margin-bottom: 4px;
+  }
+  .dp-dow {
+    text-align: center; font-size: 11px;
+    color: var(--muted); padding: 4px 0;
+  }
+  .dp-cell {
+    text-align: center; padding: 8px 0;
+    cursor: pointer; border-radius: 6px;
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+    font-size: 13px;
+    transition: background 0.1s;
+  }
+  .dp-cell.muted { color: var(--muted); opacity: 0.35; pointer-events: none; }
+  .dp-cell.disabled { color: var(--muted); cursor: not-allowed; opacity: 0.3; pointer-events: none; }
+  .dp-cell:not(.disabled):not(.muted):not(.selected):hover { background: var(--hover); }
+  .dp-cell.today { font-weight: 700; color: var(--accent); }
+  .dp-cell.selected,
+  .dp-cell.selected:hover { background: var(--accent); color: white; }
+  .dp-cell.selected.today { color: white; }
+
+  .dp-foot {
+    display: flex; gap: 6px; align-items: center;
+    margin-top: 10px;
+    border-top: 1px solid var(--line-soft);
+    padding-top: 10px;
+  }
+  .dp-clear {
+    background: transparent; border: 1px solid var(--line);
+    color: var(--text-2); padding: 6px 10px;
+    border-radius: 6px; cursor: pointer;
+    font-size: 12px; font-family: inherit;
+    margin-right: auto;
+  }
+  .dp-clear:hover { color: var(--text); border-color: var(--text-2); }
+  .dp-cancel {
+    background: transparent; border: 1px solid var(--line);
+    color: var(--text-2); padding: 6px 12px;
+    border-radius: 6px; cursor: pointer;
+    font-size: 12px; font-family: inherit;
+  }
+  .dp-cancel:hover { color: var(--text); border-color: var(--text-2); }
+  .dp-confirm {
+    background: var(--accent); color: white; border: none;
+    padding: 6px 16px; border-radius: 6px; cursor: pointer;
+    font-size: 12px; font-weight: 500; font-family: inherit;
+  }
+  .dp-confirm:hover { opacity: 0.9; }
+
+  /* === 未来项弹窗 === */
+  .future-empty {
+    color: var(--muted); padding: 40px 4px;
+    font-size: 13px; font-style: italic; text-align: center;
+  }
+  .future-day { margin-bottom: 22px; }
+  .future-day-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 0 4px 6px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 2px;
+  }
+  .future-day-head .fd-date {
+    font-size: 14px; font-weight: 600; color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .future-day-head .fd-dow {
+    font-size: 12px; color: var(--text-2);
+  }
+  .future-day-head .fd-count {
+    font-size: 12px; color: var(--muted);
+  }
+  .future-day-head .fd-rel {
+    margin-left: auto;
+    font-size: 11px; color: var(--accent);
+    font-weight: 500;
+  }
+  .future-day ul { list-style: none; padding: 0; }
+  /* 未来项弹窗：让 summary 紧贴 title，× 留右 */
+  #futureModal .modal-head h2 { margin-right: 0; }
+  #futureSummary {
+    font-size: 13px; color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+    margin-right: auto;
+  }
+
+  /* === 每日任务（种子）区块：底部管理入口，视觉降级 === */
+  .recur-section {
+    margin-top: 28px; padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .recur-section-head {
+    display: flex; align-items: baseline; gap: 6px;
+    padding: 0 4px 6px;
+  }
+  .recur-section-head .rs-title {
+    font-size: 12px; font-weight: 500;
+    color: var(--text-2);
+    letter-spacing: 0.02em;
+  }
+  .recur-section-head .rs-count {
+    font-size: 11px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .recur-section-head .rs-hint {
+    margin-left: auto;
+    font-size: 11px; color: var(--muted);
+  }
+  .recur-section ul { list-style: none; padding: 0; margin: 0; }
+  .recur-seed {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 4px;
+    font-size: 12px;
+  }
+  .recur-seed:hover { background: var(--bg-2); border-radius: 4px; }
+  .recur-seed .rs-icon {
+    font-size: 11px; opacity: 0.55;
+  }
+  .recur-seed .rs-text {
+    flex: 1; color: var(--text-2);
+  }
+  .recur-seed .rs-pri {
+    font-size: 10px; padding: 0 5px; border-radius: 3px;
+    background: var(--bg-2); color: var(--muted);
+  }
+  .recur-seed .rs-tag {
+    font-size: 10px; color: var(--muted);
+  }
+  .recur-seed .rs-del {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 14px; padding: 0 4px;
+    opacity: 0.5;
+  }
+  .recur-seed:hover .rs-del { opacity: 1; }
+  .recur-seed .rs-del:hover { color: #d44; }
+
+  /* 添加按钮：默认是个低调入口，点了才展开 form */
+  .recur-add-toggle {
+    display: block; width: 100%;
+    margin-top: 6px; padding: 6px 4px;
+    background: none; border: none;
+    color: var(--muted); font-size: 11px;
+    cursor: pointer; text-align: left;
+    font-family: inherit;
+  }
+  .recur-add-toggle:hover { color: var(--accent); }
+  .recur-add-form {
+    display: none; gap: 6px; align-items: center;
+    padding: 8px 4px 0; margin-top: 2px;
+  }
+  .recur-add-form.show { display: flex; }
+  .recur-add-form input {
+    flex: 1; padding: 5px 10px; font-size: 12px;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--text); font-family: inherit;
+  }
+  .recur-add-form select {
+    padding: 5px 6px; font-size: 11px; font-family: inherit;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--text);
+  }
+  .recur-add-form button {
+    padding: 5px 10px; font-size: 11px;
+    background: var(--accent); color: white; border: none;
+    border-radius: 6px; cursor: pointer; font-family: inherit;
+  }
+  .recur-add-form button:hover { opacity: 0.9; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>每日待办<span class="total" id="total"></span></h1>
+    <div class="header-right">
+      <button class="btn-icon" id="syncBtn" title="手动同步：拉取其他设备的最新改动并刷新">🔄 同步</button>
+      <button class="btn-icon" id="futureBtn" title="未来项（30 天内已计划但未到日）">📅 未来</button>
+      <button class="btn-icon" id="reviewBtn" title="周复盘">📊 复盘</button>
+    </div>
+  </header>
+
+  <div class="update-banner" id="updateBanner">
+    <span class="ub-text">🆕 新版本 <span class="ub-ver" id="updateVer">—</span> 已发布</span>
+    <button class="ub-btn" id="updateNow">立即更新</button>
+    <button class="ub-btn" id="updateView" style="background:rgba(255,255,255,0.2);color:white;">查看</button>
+    <button class="ub-close" id="updateDismiss" title="忽略">×</button>
+  </div>
+
+  <div class="add">
+    <textarea id="newText" rows="1" placeholder="加一件事，回车换行，点「添加」提交…" autofocus></textarea>
+    <select id="newPri" title="优先级">
+      <option value="P0">P0</option>
+      <option value="P1" selected>P1</option>
+      <option value="P2">P2</option>
+      <option value="P3">P3</option>
+    </select>
+    <select id="newTag" title="分类">
+      <option value="work">work</option>
+      <option value="startup">startup</option>
+      <option value="personal">personal</option>
+    </select>
+    <button class="due-btn" id="newDueBtn" title="计划完成日（默认今天，最多 30 天后）">今天</button>
+    <button id="addBtn">添加</button>
+  </div>
+
+  <div id="groups"></div>
+
+  <footer><span id="meta">—</span></footer>
+</div>
+
+<div class="toast" id="toast">
+  <span class="toast-text" id="toastText"></span>
+  <div class="toast-progress"><div class="toast-bar" id="toastBar"></div></div>
+</div>
+
+<!-- 未来项模态框 -->
+<div class="modal" id="futureModal">
+  <div class="modal-bg" data-close="future"></div>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2>📅 未来项</h2>
+      <span id="futureSummary">—</span>
+      <button class="close" data-close="future">×</button>
+    </div>
+    <div id="futureList"></div>
+  </div>
+</div>
+
+<!-- 周复盘模态框 -->
+<div class="modal" id="reviewModal">
+  <div class="modal-bg" data-close="1"></div>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2>📊 周复盘</h2>
+      <button class="nav-btn" id="weekPrev" title="上一周">←</button>
+      <span class="week-label" id="weekLabel">—</span>
+      <button class="nav-btn" id="weekNext" title="下一周">→</button>
+      <button class="this-week" id="weekThis">本周</button>
+      <button class="close" data-close="1">×</button>
+    </div>
+    <div id="weekTable"></div>
+  </div>
+</div>
+
+<script>
+let state = { tasks: [] };
+let lastUpdated = "";
+let dirty = false;
+
+const PRI_ORDER = ["P0", "P1", "P2", "P3"];
+const PRI_LABEL = {
+  P0: "紧急", P1: "重要", P2: "一般", P3: "后续"
+};
+
+function pad2(n) { return String(n).padStart(2, "0"); }
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+function dateStrOffset(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function fmtTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const now = new Date();
+  const sameDay = d.getFullYear() === now.getFullYear() &&
+                  d.getMonth() === now.getMonth() &&
+                  d.getDate() === now.getDate();
+  const pad = n => String(n).padStart(2, "0");
+  if (sameDay) return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getMonth() + 1}-${pad(d.getDate())}`;
+}
+function fmtFull(iso) {
+  if (!iso) return "";
+  return iso.replace("T", " ").slice(0, 16);
+}
+
+function renderTask(t) {
+  const li = document.createElement("li");
+  const cls = [];
+  if (t.done) cls.push("done");
+  if (t.auto_skipped) cls.push("auto-skipped");
+  li.className = cls.join(" ");
+  li.dataset.id = t.id;
+
+  // 左侧主控件：普通行 = 完成 checkbox；建议行 = ✓采纳（建议只能采纳/拒绝，不能"完成"）
+  const isSuggest = t.source === "claude-suggest";
+  if (isSuggest) li.classList.add("suggest");
+  let lead;
+  if (isSuggest) {
+    lead = document.createElement("button");
+    lead.className = "accept-lead"; lead.textContent = "✓ 采纳";
+    lead.title = "采纳：转为正式待办，移出建议区";
+    lead.addEventListener("click", () => acceptSuggest(t.id));
+  } else {
+    lead = document.createElement("input");
+    lead.type = "checkbox"; lead.checked = !!t.done;
+    lead.addEventListener("change", () => toggleTask(t.id, lead.checked));
+  }
+
+  const txt = document.createElement("div");
+  txt.className = "text"; txt.textContent = t.text;
+  txt.contentEditable = "true";
+  txt.addEventListener("blur", () => editTask(t.id, txt.textContent.trim()));
+
+  // note 背景说明（claude-suggest 建议常驻显示）
+  let txtNode = txt;
+  if (t.note) {
+    const wrap = document.createElement("div");
+    wrap.className = "text-wrap";
+    const noteDiv = document.createElement("div");
+    noteDiv.className = "note";
+    noteDiv.textContent = t.note;
+    wrap.append(txt, noteDiv);
+    txtNode = wrap;
+  }
+
+  // 右侧元数据：tag · 时间
+  const meta = document.createElement("span");
+  meta.className = "meta-cell";
+  const parts = [];
+  if (t.tag) parts.push(t.tag);
+  if (t.auto_skipped) {
+    const md = (t.skipped_for || "").slice(5).replace("-", "/");
+    parts.push(`⏭ ${md || ""} 未做`.replace(/\s+/g, " ").trim());
+    meta.title = `原本：${t.skipped_for || "—"} 未完成\n自动跳过：${fmtFull(t.done_at)}`;
+  } else if (t.done && t.done_at) {
+    parts.push("完 " + fmtTime(t.done_at));
+    meta.title = `添加：${fmtFull(t.created)}\n完成：${fmtFull(t.done_at)}`;
+  } else if (t.created) {
+    parts.push("加 " + fmtTime(t.created));
+    meta.title = `添加：${fmtFull(t.created)}`;
+  }
+  meta.innerHTML = parts.map((p, i) =>
+    i === 0 ? `<span>${p}</span>` : `<span class="sep">·</span><span>${p}</span>`
+  ).join("");
+
+  // 右侧工具栏
+  const actions = document.createElement("span");
+  actions.className = "actions";
+
+  if (isSuggest) {
+    // 建议行：与左侧「✓采纳」配对的「✕拒绝」(= 从建议区删除)，始终可见
+    const rej = document.createElement("button");
+    rej.className = "del reject"; rej.textContent = "✕ 拒绝";
+    rej.title = "拒绝：从建议区删除";
+    rej.addEventListener("click", () => deleteTask(t.id));
+    actions.append(rej);
+  } else {
+    const priSel = document.createElement("select");
+    priSel.className = "pri-select " + (t.priority || "PN");
+    priSel.title = "改优先级";
+    [["P0","P0"],["P1","P1"],["P2","P2"],["P3","P3"],["","—"]].forEach(([v, label]) => {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = label;
+      if ((t.priority || "") === v) o.selected = true;
+      priSel.appendChild(o);
+    });
+    priSel.addEventListener("change", () => setPriority(t.id, priSel.value || null));
+    priSel.addEventListener("click", (e) => e.stopPropagation());
+
+    const dueBtn = document.createElement("button");
+    dueBtn.className = "due-btn due-btn-sm";
+    dueBtn.textContent = fmtDueShort(t.due || "");
+    if (t.due) dueBtn.classList.add("active");
+    dueBtn.title = "改计划日";
+    dueBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openDatePicker(dueBtn, t.due || "", (v) => setDue(t.id, v));
+    });
+
+    const del = document.createElement("button");
+    del.className = "del"; del.textContent = "×";
+    del.title = "删除";
+    del.addEventListener("click", () => deleteTask(t.id));
+
+    actions.append(priSel, dueBtn, del);
+  }
+
+  li.append(lead, txtNode, actions, meta);
+  return li;
+}
+
+function renderGroup(key, label, labelCn, tasks, collapsible = false) {
+  if (tasks.length === 0) return null;
+  const g = document.createElement("div");
+  g.className = "group " + key;
+  if (collapsible) {
+    const saved = localStorage.getItem("collapsed_" + key);
+    const collapsed = saved === null ? true : saved === "1";  // 默认折叠
+    if (collapsed) g.classList.add("collapsed");
+  }
+  const head = document.createElement("div");
+  head.className = "group-head" + (collapsible ? " collapsible" : "");
+  head.innerHTML = `
+    <span class="pri-dot"></span>
+    <span class="label">${label}</span>
+    <span class="label-cn">${labelCn}</span>
+    <span class="count">${tasks.length}</span>
+    ${collapsible ? '<span class="toggle">▾</span>' : ''}
+  `;
+  if (collapsible) {
+    head.addEventListener("click", () => {
+      g.classList.toggle("collapsed");
+      localStorage.setItem("collapsed_" + key, g.classList.contains("collapsed") ? "1" : "0");
+    });
+  }
+  const ul = document.createElement("ul");
+  tasks.forEach(t => ul.appendChild(renderTask(t)));
+  g.append(head, ul);
+  return g;
+}
+
+function render() {
+  const root = document.getElementById("groups");
+  root.innerHTML = "";
+  const today = todayStr();
+
+  // 分桶：未来项（due > 今天）单独走 future，不进主列表
+  // 种子（recurring=daily 且无 recur_source）= 模板，不在任何列表显示，只在「每日任务」区块管理
+  const buckets = { suggest: [], P0: [], P1: [], P2: [], P3: [], PN: [], done: [], future: [] };
+  for (const t of state.tasks) {
+    if (t.recurring === "daily" && !t.recur_source) continue;  // 跳过种子
+    if (t.done) { if (t.done_at && t.done_at.slice(0,10) === today) buckets.done.push(t); continue; }
+    if (t.source === "claude-suggest") { buckets.suggest.push(t); continue; }  // Claude 建议隔离区，待 Ocean 审
+    if (t.due && t.due > today) { buckets.future.push(t); continue; }
+    if (PRI_ORDER.includes(t.priority)) buckets[t.priority].push(t);
+    else buckets.PN.push(t);
+  }
+  for (const k of ["P0","P1","P2","P3","PN"]) {
+    buckets[k].sort((a, b) => (b.created || "").localeCompare(a.created || ""));
+  }
+  buckets.suggest.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
+  buckets.done.sort((a, b) => (b.done_at || "").localeCompare(a.done_at || ""));
+
+  if (buckets.suggest.length) {
+    const g = renderGroup("SG", "💡", "Claude 建议", buckets.suggest);
+    if (g) root.appendChild(g);
+  }
+  for (const k of PRI_ORDER) {
+    const g = renderGroup(k, k, PRI_LABEL[k], buckets[k]);
+    if (g) root.appendChild(g);
+  }
+  if (buckets.PN.length) {
+    const g = renderGroup("PN", "—", "未分类", buckets.PN);
+    if (g) root.appendChild(g);
+  }
+  if (buckets.done.length) {
+    const g = renderGroup("DN", "✓", "今日完成", buckets.done, true);
+    if (g) root.appendChild(g);
+  }
+
+  const nOpen = buckets.P0.length + buckets.P1.length + buckets.P2.length + buckets.P3.length + buckets.PN.length;
+  const parts = [`${nOpen} 件未完`];
+  if (buckets.suggest.length) parts.push(`💡${buckets.suggest.length} 建议待审`);
+  if (buckets.done.length) parts.push(`${buckets.done.length} 今日完成`);
+  if (buckets.future.length) parts.push(`${buckets.future.length} 未来`);
+  document.getElementById("total").textContent = "· " + parts.join(" · ");
+  document.getElementById("meta").textContent =
+    "更新 " + (state.updated || "—").replace("T", " ").slice(0, 16);
+
+  // 未来按钮 badge
+  const fBtn = document.getElementById("futureBtn");
+  fBtn.textContent = `📅 未来${buckets.future.length ? ` (${buckets.future.length})` : ""}`;
+
+  if (nOpen === 0 && buckets.done.length === 0 && buckets.future.length === 0 && buckets.suggest.length === 0) {
+    root.innerHTML = '<div class="empty">还没有待办，加一件？</div>';
+  } else if (nOpen === 0 && buckets.future.length > 0 && buckets.suggest.length === 0) {
+    root.innerHTML = `<div class="empty">今天已清空 ✓ — ${buckets.future.length} 件未来项待启动（点右上「📅 未来」查看）</div>`;
+  }
+
+  // 未来弹窗如果开着，同步刷新
+  if (document.getElementById("futureModal").classList.contains("show")) {
+    renderFuture();
+  }
+}
+
+async function load() {
+  if (dirty) return;
+  try {
+    const r = await fetch("/todos", { cache: "no-store" });
+    const data = await r.json();
+    if (data.updated !== lastUpdated) {
+      state = data; lastUpdated = data.updated; render();
+    }
+  } catch (e) { console.warn("load failed", e); }
+}
+
+async function save() {
+  dirty = true;
+  try {
+    const r = await fetch("/todos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state)
+    });
+    const j = await r.json();
+    lastUpdated = j.updated || lastUpdated;
+    state.updated = lastUpdated;
+  } catch (e) { console.warn("save failed", e); }
+  finally { dirty = false; render(); }
+}
+
+function genId() { return "t" + Date.now() + Math.floor(Math.random() * 1000); }
+
+function addTask(text, tag, priority, due) {
+  if (!text) return;
+  const t = {
+    id: genId(), text, done: false,
+    created: new Date().toISOString().slice(0, 19),
+    done_at: null, source: "user", tag: tag || "work",
+    priority: priority || "P1"
+  };
+  if (due && due > todayStr()) t.due = due;  // 仅未来日存 due，今天/无 = 直接进主列表
+  state.tasks.push(t);
+  save();
+}
+function setPriority(id, p) {
+  const t = state.tasks.find(x => x.id === id);
+  if (!t) return;
+  t.priority = p || null;
+  save();
+}
+function setDue(id, due) {
+  const t = state.tasks.find(x => x.id === id);
+  if (!t) return;
+  if (!due || due <= todayStr()) delete t.due;
+  else t.due = due;
+  save();
+}
+function toggleTask(id, done) {
+  const t = state.tasks.find(x => x.id === id);
+  if (!t) return;
+  t.done = done;
+  t.done_at = done ? new Date().toISOString().slice(0, 19) : null;
+  save();
+}
+function editTask(id, text) {
+  const t = state.tasks.find(x => x.id === id);
+  if (!t || !text || text === t.text) return;
+  t.text = text; save();
+}
+function deleteTask(id) {
+  state.tasks = state.tasks.filter(x => x.id !== id);
+  save();
+}
+function acceptSuggest(id) {
+  const t = state.tasks.find(x => x.id === id);
+  if (!t) return;
+  t.source = "claude";  // 转正：建议 → 正式待办，移出建议组
+  save();
+}
+
+const newTextEl = document.getElementById("newText");
+function resizeNewText() {
+  newTextEl.style.height = "auto";
+  newTextEl.style.height = Math.min(newTextEl.scrollHeight, 160) + "px";
+}
+newTextEl.addEventListener("input", resizeNewText);
+resizeNewText();
+
+let newDueValue = "";  // "" = 今天/无；非空 = "YYYY-MM-DD" 未来
+const newDueBtn = document.getElementById("newDueBtn");
+function refreshNewDueBtn() {
+  newDueBtn.textContent = fmtDueShort(newDueValue);
+  newDueBtn.classList.toggle("active", !!newDueValue);
+}
+refreshNewDueBtn();
+newDueBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  openDatePicker(newDueBtn, newDueValue, (v) => {
+    newDueValue = v || "";
+    refreshNewDueBtn();
+  });
+});
+
+document.getElementById("addBtn").addEventListener("click", () => {
+  const tag = document.getElementById("newTag").value;
+  const pri = document.getElementById("newPri").value;
+  addTask(newTextEl.value.trim(), tag, pri, newDueValue);
+  newTextEl.value = "";
+  newDueValue = ""; refreshNewDueBtn();
+  resizeNewText(); newTextEl.focus();
+});
+
+load();
+setInterval(load, 5000);
+
+// ============== 手动同步（拉取其他设备最新改动 + 刷新列表）==============
+async function manualRefresh() {
+  const btn = document.getElementById("syncBtn");
+  if (btn.disabled) return;
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "⏳ 同步中…";
+  try {
+    const r = await fetch("/sync-now", { method: "POST" });
+    const j = await r.json();
+    lastUpdated = null;        // 强制下次 load 重渲染
+    await load();
+    showToast((j.ok ? "✅ " : "⚠️ ") + (j.status || "同步完成"), j.ok ? 2000 : 4000);
+  } catch (e) {
+    showToast("⚠️ 同步出错：" + e.message, 4000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+document.getElementById("syncBtn").addEventListener("click", manualRefresh);
+
+// ============== 版本检查 ==============
+function cmpVer(a, b) {
+  const pa = String(a).split(".").map(n => parseInt(n) || 0);
+  const pb = String(b).split(".").map(n => parseInt(n) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+function showToast(msg, ms = 2500, withProgress = false) {
+  const t = document.getElementById("toast");
+  document.getElementById("toastText").textContent = msg;
+  t.classList.toggle("with-progress", withProgress);
+  t.classList.add("show");
+  clearTimeout(showToast._timer);
+  if (ms > 0) {
+    showToast._timer = setTimeout(() => t.classList.remove("show"), ms);
+  }
+}
+function hideToast() {
+  document.getElementById("toast").classList.remove("show");
+  clearTimeout(showToast._timer);
+}
+function setToastProgress(percent) {
+  document.getElementById("toastBar").style.width = Math.max(0, Math.min(100, percent)) + "%";
+}
+function fmtSize(bytes) {
+  if (!bytes) return "0";
+  const mb = bytes / 1024 / 1024;
+  return mb < 10 ? mb.toFixed(1) + " MB" : Math.round(mb) + " MB";
+}
+
+async function checkUpdate(verbose = false) {
+  if (verbose) showToast("⏳ 检查中…", 8000);
+  let data;
+  try {
+    const r = await fetch("/check-update", { cache: "no-store" });
+    data = await r.json();
+  } catch (e) {
+    if (verbose) showToast("❌ 检查失败：server 无响应");
+    return;
+  }
+  if (data.error) {
+    if (verbose) {
+      const hint = data.has_token ? "" : "（未配 .gh-token）";
+      showToast(`❌ ${data.error.slice(0, 60)} ${hint}`);
+    }
+    return;
+  }
+  const me = data.current;
+  const latest = data.latest;
+  if (!latest) {
+    if (verbose) showToast("❌ 远端 release 不存在");
+    return;
+  }
+  if (cmpVer(latest, me) > 0) {
+    if (verbose) localStorage.removeItem("dismissedVer");
+    if (localStorage.getItem("dismissedVer") !== latest) {
+      const banner = document.getElementById("updateBanner");
+      document.getElementById("updateVer").textContent = "v" + latest;
+      banner.classList.add("show");
+      banner.dataset.url = data.html_url;
+      banner.dataset.ver = latest;
+    }
+    if (verbose) showToast(`🆕 发现新版本 v${latest}`);
+  } else {
+    if (verbose) showToast(`✅ 已是最新 v${me}`);
+  }
+}
+document.getElementById("updateView").addEventListener("click", () => {
+  const url = document.getElementById("updateBanner").dataset.url;
+  if (url) window.open(url, "_blank");
+});
+
+async function pollUpdateProgress() {
+  while (true) {
+    let p;
+    try {
+      const r = await fetch("/update-progress", { cache: "no-store" });
+      p = await r.json();
+    } catch (e) {
+      // server 自杀后 fetch fail：updater 接管中
+      showToast("✅ App 即将重启…", 6000, false);
+      setToastProgress(100);
+      return;
+    }
+    if (p.status === "error") {
+      showToast("❌ 更新失败：" + (p.error || "").slice(0, 80), 6000, false);
+      return;
+    }
+    if (p.status === "downloading") {
+      const pct = p.total > 0 ? Math.floor(p.downloaded / p.total * 100) : 0;
+      const txt = `⬇ 下载中 ${pct}% · ${fmtSize(p.downloaded)} / ${fmtSize(p.total)}`;
+      showToast(txt, 0, true);
+      setToastProgress(pct);
+    } else if (p.status === "downloaded" || p.status === "installing") {
+      showToast("⚙️ 安装中…", 0, true);
+      setToastProgress(100);
+    } else if (p.status === "restarting") {
+      showToast("✅ App 即将重启…", 6000, false);
+      setToastProgress(100);
+      return;
+    }
+    await new Promise(r => setTimeout(r, 400));
+  }
+}
+
+document.getElementById("updateNow").addEventListener("click", async () => {
+  if (!confirm("立即下载新版本并替换 App 吗？\n替换过程 App 会自动重启。")) return;
+  showToast("⏳ 准备下载…", 0, true);
+  setToastProgress(0);
+  try {
+    const r = await fetch("/install-update", { method: "POST" });
+    const d = await r.json();
+    if (d.error) {
+      showToast("❌ 触发失败：" + d.error.slice(0, 80), 6000, false);
+      return;
+    }
+    pollUpdateProgress();
+  } catch (e) {
+    showToast("❌ 网络错误", 4000, false);
+  }
+});
+document.getElementById("updateDismiss").addEventListener("click", () => {
+  const ver = document.getElementById("updateBanner").dataset.ver;
+  if (ver) localStorage.setItem("dismissedVer", ver);
+  document.getElementById("updateBanner").classList.remove("show");
+});
+// 检查更新入口已移到 macOS 菜单栏「每日待办」→「检查更新…」
+// PyObjC 会从原生菜单调用 window.evaluate_js("checkUpdate(true)")
+
+// 启动后 2 秒检查 + 之后每小时检查（静默）
+setTimeout(() => checkUpdate(false), 2000);
+setInterval(() => checkUpdate(false), 60 * 60 * 1000);
+
+// ============== 周复盘 ==============
+const DOW = ["一", "二", "三", "四", "五", "六", "日"];
+let viewWeekStart = null;  // 当前查看的周（周一日期对象）
+
+function getMonday(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  const day = x.getDay() || 7;  // 周日 = 7
+  x.setDate(x.getDate() - (day - 1));
+  return x;
+}
+function getWeekKey(d) {
+  // ISO 周编号
+  const date = new Date(d);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  const wnum = 1 + Math.round(((date - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+  return { year: date.getFullYear(), week: wnum };
+}
+function fmtMD(d) {
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+function isSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() &&
+         a.getMonth() === b.getMonth() &&
+         a.getDate() === b.getDate();
+}
+function earliestMonday() {
+  const dates = state.tasks.map(t => t.created).filter(Boolean).sort();
+  if (!dates.length) return getMonday(new Date());
+  return getMonday(new Date(dates[0]));
+}
+
+function tasksOnDate(d) {
+  return state.tasks.filter(t => {
+    if (!t.done || !t.done_at) return false;
+    const td = new Date(t.done_at);
+    return isSameDay(td, d);
+  });
+}
+
+function heatLevel(n) {
+  if (n === 0) return "l0";
+  if (n === 1) return "l1";
+  if (n <= 2) return "l2";
+  if (n <= 4) return "l3";
+  return "l4";
+}
+
+function renderReview() {
+  if (!viewWeekStart) viewWeekStart = getMonday(new Date());
+  const today = new Date(); today.setHours(0,0,0,0);
+  const thisWeek = getMonday(today);
+  const earliest = earliestMonday();
+
+  // 周 label
+  const wk = getWeekKey(viewWeekStart);
+  const sun = new Date(viewWeekStart);
+  sun.setDate(sun.getDate() + 6);
+  document.getElementById("weekLabel").textContent =
+    `${wk.year} W${String(wk.week).padStart(2,"0")} · ${fmtMD(viewWeekStart)} - ${fmtMD(sun)}`;
+
+  // 导航按钮 enable/disable
+  document.getElementById("weekPrev").disabled = viewWeekStart <= earliest;
+  document.getElementById("weekNext").disabled = viewWeekStart >= thisWeek;
+
+  // 收集 7 天数据
+  const days = [];
+  let weekTotal = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(viewWeekStart);
+    d.setDate(d.getDate() + i);
+    const tasks = tasksOnDate(d);
+    weekTotal += tasks.length;
+    days.push({ date: d, tasks, isFuture: d > today, isToday: isSameDay(d, today) });
+  }
+
+  // 渲染单个 day cell 内容
+  function dayHTML(idx) {
+    const { date, tasks, isFuture, isToday } = days[idx];
+    const cls = "day-cell" + (isFuture ? " future" : "") + (isToday ? " today" : "");
+    const head = `
+      <div class="day-head">
+        <span class="dow">周${DOW[idx]} 完成</span>
+        <span class="ddate">${fmtMD(date)} · ${tasks.length}件</span>
+      </div>`;
+    let body;
+    if (isFuture) {
+      body = `<div class="empty-hint"></div>`;
+    } else if (tasks.length === 0) {
+      body = `<div class="empty-hint">（无）</div>`;
+    } else {
+      const lis = tasks.map(t => {
+        const time = t.done_at ? t.done_at.slice(11, 16) : "";
+        const pri = t.priority ? `<span class="task-pri ${t.priority}">${t.priority}</span>` : "";
+        return `<li>
+          <span class="check">✓</span>
+          ${pri}
+          <span class="task-text">${escapeHtml(t.text)}</span>
+          <span class="task-time">${time}</span>
+        </li>`;
+      }).join("");
+      body = `<ul>${lis}</ul>`;
+    }
+    return `<td class="${cls}">${head}${body}</td>`;
+  }
+
+  // 装表：colgroup 锁列宽 → 第一行汇总（colspan=3）→ 2-3 行各 3 天 → 4 行周日 + colspan=2 空
+  const html = `
+    <table class="review-table">
+      <colgroup>
+        <col style="width:33.33%">
+        <col style="width:33.33%">
+        <col style="width:33.34%">
+      </colgroup>
+      <tr class="summary-row">
+        <td colspan="3">本周汇总：共完成 <span class="summary-num">${weekTotal}</span> 件事情</td>
+      </tr>
+      <tr>${dayHTML(0)}${dayHTML(1)}${dayHTML(2)}</tr>
+      <tr>${dayHTML(3)}${dayHTML(4)}${dayHTML(5)}</tr>
+      <tr>${dayHTML(6)}<td colspan="2" class="day-cell future"></td></tr>
+    </table>`;
+  document.getElementById("weekTable").innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+function openReview() {
+  viewWeekStart = getMonday(new Date());
+  renderReview();
+  document.getElementById("reviewModal").classList.add("show");
+}
+function closeReview() {
+  document.getElementById("reviewModal").classList.remove("show");
+}
+
+document.getElementById("reviewBtn").addEventListener("click", openReview);
+document.querySelectorAll('[data-close="1"]').forEach(el =>
+  el.addEventListener("click", closeReview));
+document.getElementById("weekPrev").addEventListener("click", () => {
+  if (!viewWeekStart) return;
+  const earliest = earliestMonday();
+  const prev = new Date(viewWeekStart);
+  prev.setDate(prev.getDate() - 7);
+  if (prev >= earliest) { viewWeekStart = prev; renderReview(); }
+});
+document.getElementById("weekNext").addEventListener("click", () => {
+  if (!viewWeekStart) return;
+  const thisWeek = getMonday(new Date());
+  const next = new Date(viewWeekStart);
+  next.setDate(next.getDate() + 7);
+  if (next <= thisWeek) { viewWeekStart = next; renderReview(); }
+});
+document.getElementById("weekThis").addEventListener("click", () => {
+  viewWeekStart = getMonday(new Date());
+  renderReview();
+});
+// ============== 自定义日期选择器 ==============
+let activeDatePicker = null;
+
+function fmtDueShort(dateStr) {
+  // 输入 "YYYY-MM-DD"；输出 "今天/明天/N天后/M/D"
+  if (!dateStr) return "今天";
+  const today = todayStr();
+  if (dateStr <= today) return "今天";
+  const tD = new Date(today + "T00:00:00");
+  const dD = new Date(dateStr + "T00:00:00");
+  const days = Math.round((dD - tD) / 86400000);
+  if (days === 1) return "明天";
+  if (days <= 7) return `${days}天后`;
+  const [, m, d] = dateStr.split("-").map(Number);
+  return `${m}/${d}`;
+}
+
+function openDatePicker(anchor, currentValue, onConfirm) {
+  closeDatePicker();
+
+  const today = todayStr();
+  const maxStr = dateStrOffset(30);
+  let selected = currentValue || "";
+  let view = new Date((selected || today) + "T00:00:00");
+  view.setDate(1);
+
+  const popover = document.createElement("div");
+  popover.className = "date-picker";
+  popover.addEventListener("mousedown", e => e.stopPropagation());
+
+  function render() {
+    const y = view.getFullYear();
+    const m = view.getMonth();
+    const todayD = new Date(today + "T00:00:00");
+    const maxD = new Date(maxStr + "T00:00:00");
+    const prevAllowed = !(y === todayD.getFullYear() && m === todayD.getMonth());
+    const nextAllowed = !(y === maxD.getFullYear() && m === maxD.getMonth());
+
+    const first = new Date(y, m, 1);
+    const firstDow = (first.getDay() + 6) % 7;  // 周一=0
+    const prevLast = new Date(y, m, 0).getDate();
+    const thisLast = new Date(y, m + 1, 0).getDate();
+
+    const cells = [];
+    for (let i = firstDow - 1; i >= 0; i--) cells.push({ day: prevLast - i, muted: true });
+    for (let d = 1; d <= thisLast; d++) {
+      const dStr = `${y}-${pad2(m+1)}-${pad2(d)}`;
+      cells.push({
+        day: d,
+        date: dStr,
+        disabled: dStr < today || dStr > maxStr,
+        isToday: dStr === today,
+        isSelected: dStr === selected,
+      });
+    }
+    let nx = 1;
+    while (cells.length < 42) cells.push({ day: nx++, muted: true });
+
+    const dows = ["一","二","三","四","五","六","日"];
+    popover.innerHTML = `
+      <div class="dp-head">
+        <button class="dp-nav" data-act="prev" ${prevAllowed ? "" : "disabled"}>‹</button>
+        <div class="dp-title">${y} 年 ${m + 1} 月</div>
+        <button class="dp-nav" data-act="next" ${nextAllowed ? "" : "disabled"}>›</button>
+      </div>
+      <div class="dp-grid">
+        ${dows.map(x => `<div class="dp-dow">${x}</div>`).join("")}
+        ${cells.map(c => {
+          const cls = ["dp-cell"];
+          if (c.muted) cls.push("muted");
+          if (c.disabled) cls.push("disabled");
+          if (c.isToday) cls.push("today");
+          if (c.isSelected) cls.push("selected");
+          const attr = (c.date && !c.disabled) ? `data-date="${c.date}"` : "";
+          return `<div class="${cls.join(" ")}" ${attr}>${c.day}</div>`;
+        }).join("")}
+      </div>
+      <div class="dp-foot">
+        <button class="dp-clear">清空（=今天）</button>
+        <button class="dp-cancel">取消</button>
+        <button class="dp-confirm">确认</button>
+      </div>
+    `;
+
+    popover.querySelectorAll(".dp-nav").forEach(b => {
+      b.addEventListener("click", () => {
+        view.setMonth(view.getMonth() + (b.dataset.act === "prev" ? -1 : 1));
+        render();
+      });
+    });
+    popover.querySelectorAll(".dp-cell[data-date]").forEach(c => {
+      c.addEventListener("click", () => {
+        selected = c.dataset.date;
+        popover.querySelectorAll(".dp-cell.selected").forEach(x => x.classList.remove("selected"));
+        c.classList.add("selected");
+      });
+    });
+    popover.querySelector(".dp-clear").addEventListener("click", () => {
+      selected = "";
+      popover.querySelectorAll(".dp-cell.selected").forEach(x => x.classList.remove("selected"));
+    });
+    popover.querySelector(".dp-cancel").addEventListener("click", closeDatePicker);
+    popover.querySelector(".dp-confirm").addEventListener("click", () => {
+      onConfirm(selected || null);
+      closeDatePicker();
+    });
+  }
+  render();
+
+  document.body.appendChild(popover);
+
+  // 定位（anchor 下方，必要时翻到上方/调整左边界）
+  const r = anchor.getBoundingClientRect();
+  const pw = popover.offsetWidth || 300;
+  const ph = popover.offsetHeight || 360;
+  let top = r.bottom + 6 + window.scrollY;
+  let left = r.left + window.scrollX;
+  if (left + pw > window.innerWidth - 10) left = window.innerWidth - pw - 10;
+  if (r.bottom + ph > window.innerHeight - 10 && r.top > ph + 10) {
+    top = r.top - ph - 6 + window.scrollY;
+  }
+  popover.style.top = top + "px";
+  popover.style.left = Math.max(8, left) + "px";
+
+  activeDatePicker = popover;
+
+  function outsideClose(e) {
+    if (!popover.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) {
+      closeDatePicker();
+    }
+  }
+  popover._outside = outsideClose;
+  setTimeout(() => document.addEventListener("mousedown", outsideClose, true), 0);
+}
+
+function closeDatePicker() {
+  if (!activeDatePicker) return;
+  if (activeDatePicker._outside) {
+    document.removeEventListener("mousedown", activeDatePicker._outside, true);
+  }
+  activeDatePicker.remove();
+  activeDatePicker = null;
+}
+
+// Esc 关闭
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (activeDatePicker) { closeDatePicker(); return; }
+  if (document.getElementById("reviewModal").classList.contains("show")) closeReview();
+  if (document.getElementById("futureModal").classList.contains("show")) closeFuture();
+});
+
+// ============== 未来项弹窗 ==============
+function renderRecurSection() {
+  const seeds = state.tasks.filter(t => t.recurring === "daily" && !t.recur_source);
+  seeds.sort((a, b) => (a.created || "").localeCompare(b.created || ""));
+
+  let html = `
+    <div class="recur-section">
+      <div class="recur-section-head">
+        <span class="rs-title">📌 每日任务</span>
+        <span class="rs-count">${seeds.length}</span>
+        <span class="rs-hint">每天 00:01 自动入列</span>
+      </div>
+      <ul>`;
+  if (seeds.length === 0) {
+    html += `<li class="recur-seed" style="justify-content:center;color:var(--muted);">还没设置每日任务</li>`;
+  } else {
+    for (const s of seeds) {
+      html += `
+        <li class="recur-seed" data-id="${s.id}">
+          <span class="rs-icon">🔁</span>
+          <span class="rs-text">${escapeHtml(s.text)}</span>
+          <span class="rs-pri">${s.priority || "P1"}</span>
+          <span class="rs-tag">${s.tag || "personal"}</span>
+          <button class="rs-del" data-action="del-seed" data-id="${s.id}" title="删除（历史实例保留）">×</button>
+        </li>`;
+    }
+  }
+  html += `
+      </ul>
+      <button class="recur-add-toggle" id="recurAddToggle">+ 添加每日任务</button>
+      <div class="recur-add-form" id="recurAddForm">
+        <input id="recurNewText" type="text" placeholder="例如「每日三练」…" maxlength="200">
+        <select id="recurNewPri" title="优先级">
+          <option value="P0">P0</option>
+          <option value="P1" selected>P1</option>
+          <option value="P2">P2</option>
+          <option value="P3">P3</option>
+        </select>
+        <select id="recurNewTag" title="分类">
+          <option value="work">work</option>
+          <option value="startup">startup</option>
+          <option value="personal" selected>personal</option>
+        </select>
+        <button id="recurAddBtn">添加</button>
+      </div>
+    </div>`;
+  return html;
+}
+
+function addRecurSeed(text, priority, tag) {
+  if (!text) return;
+  const t = {
+    id: "seed_" + Date.now() + Math.floor(Math.random() * 1000),
+    text,
+    done: false,
+    created: new Date().toISOString().slice(0, 19),
+    done_at: null,
+    source: "user",
+    tag: tag || "personal",
+    priority: priority || "P1",
+    recurring: "daily"
+  };
+  state.tasks.push(t);
+  save();
+  // 立即触发后端 ensure：发一次 GET 强制服务器看到新种子并膨胀今日实例
+  setTimeout(() => fetch("/ensure-recurring", { method: "POST" }).catch(() => {}), 200);
+}
+
+function deleteRecurSeed(seedId) {
+  const seed = state.tasks.find(t => t.id === seedId);
+  if (!seed) return;
+  const hasInstances = state.tasks.some(t => t.recur_source === seedId);
+  const msg = hasInstances
+    ? "删除每日任务模板？\n已生成的历史实例（含未完成的）会保留为普通任务。"
+    : "删除每日任务模板？";
+  if (!confirm(msg)) return;
+  state.tasks = state.tasks.filter(t => t.id !== seedId);
+  save();
+}
+
+function bindRecurSection(root) {
+  const toggle = root.querySelector("#recurAddToggle");
+  const form = root.querySelector("#recurAddForm");
+  const addBtn = root.querySelector("#recurAddBtn");
+  const addInput = root.querySelector("#recurNewText");
+
+  if (toggle && form) {
+    toggle.addEventListener("click", () => {
+      const showing = form.classList.toggle("show");
+      toggle.textContent = showing ? "× 收起" : "+ 添加每日任务";
+      if (showing && addInput) addInput.focus();
+    });
+  }
+  if (addBtn && addInput) {
+    addBtn.addEventListener("click", () => {
+      const text = addInput.value.trim();
+      const pri = root.querySelector("#recurNewPri").value;
+      const tag = root.querySelector("#recurNewTag").value;
+      if (!text) return;
+      addRecurSeed(text, pri, tag);
+      addInput.value = "";
+    });
+    addInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        addBtn.click();
+      }
+    });
+  }
+  root.querySelectorAll('[data-action="del-seed"]').forEach(btn => {
+    btn.addEventListener("click", () => deleteRecurSeed(btn.dataset.id));
+  });
+}
+
+function renderFuture() {
+  const today = todayStr();
+  const items = state.tasks.filter(t => !t.done && t.due && t.due > today);
+  items.sort((a, b) => a.due.localeCompare(b.due));
+
+  const root = document.getElementById("futureList");
+  root.innerHTML = "";
+  const seedCount = state.tasks.filter(t => t.recurring === "daily" && !t.recur_source).length;
+  const sumParts = [`${items.length} 日常`];
+  if (seedCount > 0) sumParts.push(`${seedCount} 每日任务`);
+  document.getElementById("futureSummary").textContent = sumParts.join(" · ");
+
+  if (items.length === 0) {
+    const note = document.createElement("div");
+    note.className = "future-empty";
+    note.innerHTML = '还没有未来计划项<br>添加事项时把日期选成未来即可';
+    root.appendChild(note);
+    // 即便没有未来项，也要在底部展示每日任务区块（管理入口）
+    const recurWrap = document.createElement("div");
+    recurWrap.innerHTML = renderRecurSection();
+    root.appendChild(recurWrap);
+    bindRecurSection(recurWrap);
+    return;
+  }
+
+  // 按 due 分组（升序）
+  const byDate = {};
+  for (const t of items) {
+    (byDate[t.due] = byDate[t.due] || []).push(t);
+  }
+  const todayD = new Date(today + "T00:00:00");
+  for (const date of Object.keys(byDate).sort()) {
+    const tasks = byDate[date];
+    const d = new Date(date + "T00:00:00");
+    const dow = "周" + DOW[(d.getDay() || 7) - 1];
+    const days = Math.round((d - todayD) / 86400000);
+    const rel = days === 1 ? "明天" : days <= 7 ? `${days} 天后` : `${days} 天后`;
+    const wrap = document.createElement("div");
+    wrap.className = "future-day";
+    const head = document.createElement("div");
+    head.className = "future-day-head";
+    head.innerHTML = `
+      <span class="fd-date">${fmtMD(d)}</span>
+      <span class="fd-dow">${dow}</span>
+      <span class="fd-count">${tasks.length} 件</span>
+      <span class="fd-rel">${rel}</span>
+    `;
+    const ul = document.createElement("ul");
+    tasks.forEach(t => ul.appendChild(renderTask(t)));
+    wrap.append(head, ul);
+    root.appendChild(wrap);
+  }
+
+  // 每日任务区块永远放在最底（管理入口，不喧宾）
+  const recurWrap = document.createElement("div");
+  recurWrap.innerHTML = renderRecurSection();
+  root.appendChild(recurWrap);
+  bindRecurSection(recurWrap);
+}
+function openFuture() {
+  renderFuture();
+  document.getElementById("futureModal").classList.add("show");
+}
+function closeFuture() {
+  document.getElementById("futureModal").classList.remove("show");
+}
+document.getElementById("futureBtn").addEventListener("click", openFuture);
+document.querySelectorAll('[data-close="future"]').forEach(el =>
+  el.addEventListener("click", closeFuture));
+</script>
+</body>
+</html>
