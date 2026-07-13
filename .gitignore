@@ -10,3 +10,4 @@ __pycache__/
 .update/
 backups/
 com.ocean.*.plist
+.worktrees/
