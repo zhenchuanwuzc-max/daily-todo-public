@@ -870,16 +870,23 @@ function renderGroup(key, label, labelCn, tasks, collapsible = false) {
   return g;
 }
 
+function isRecurringSeed(task) {
+  return (
+    ["daily", "weekly", "monthly"].includes(task.recurring)
+    && !task.recur_source
+  );
+}
+
 function render() {
   const root = document.getElementById("groups");
   root.innerHTML = "";
   const today = todayStr();
 
   // 分桶：未来项（due > 今天）单独走 future，不进主列表
-  // 种子（recurring=daily 且无 recur_source）= 模板，不在任何列表显示，只在「每日任务」区块管理
+  // 重复任务种子 = 模板，不在主列表显示，只在「重复任务」区块管理
   const buckets = { suggest: [], P0: [], P1: [], P2: [], P3: [], PN: [], done: [], future: [] };
   for (const t of state.tasks) {
-    if (t.recurring === "daily" && !t.recur_source) continue;  // 跳过种子
+    if (isRecurringSeed(t)) continue;
     if (t.done) { if (t.done_at && t.done_at.slice(0,10) === today) buckets.done.push(t); continue; }
     if (t.source === "claude-suggest") { buckets.suggest.push(t); continue; }  // Claude 建议隔离区，待 Ocean 审
     if (t.due && t.due > today) { buckets.future.push(t); continue; }
@@ -1527,9 +1534,7 @@ function scheduleLabel(seed) {
 }
 
 function renderRecurSection() {
-  const seeds = state.tasks.filter(t =>
-    ["daily", "weekly", "monthly"].includes(t.recurring) && !t.recur_source
-  );
+  const seeds = state.tasks.filter(isRecurringSeed);
   seeds.sort((a, b) => (a.created || "").localeCompare(b.created || ""));
 
   let html = `
@@ -1693,9 +1698,7 @@ function renderFuture() {
 
   const root = document.getElementById("futureList");
   root.innerHTML = "";
-  const seedCount = state.tasks.filter(t =>
-    ["daily", "weekly", "monthly"].includes(t.recurring) && !t.recur_source
-  ).length;
+  const seedCount = state.tasks.filter(isRecurringSeed).length;
   const sumParts = [`${items.length} 日常`];
   if (seedCount > 0) sumParts.push(`${seedCount} 重复任务`);
   document.getElementById("futureSummary").textContent = sumParts.join(" · ");

@@ -17,6 +17,10 @@ class RecurringUiContractTest(unittest.TestCase):
         self.assertIn('fetch("/recurring/add"', self.html)
         self.assertIn("function scheduleLabel", self.html)
 
+    def test_all_recurring_seeds_are_hidden_from_the_main_list(self):
+        self.assertIn("function isRecurringSeed", self.html)
+        self.assertIn("if (isRecurringSeed(t)) continue;", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()
