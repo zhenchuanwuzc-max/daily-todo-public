@@ -440,6 +440,75 @@ def add_single_task(item: dict) -> dict:
     return task, False
 
 
+def add_recurring_seed(item: dict):
+    """Validate and atomically add a daily, weekly, or monthly seed."""
+    text = (item.get("text") or "").strip()
+    if not text:
+        raise ValueError("text required")
+
+    recurring = item.get("recurring")
+    if recurring not in {"daily", "weekly", "monthly"}:
+        raise ValueError("recurring must be daily, weekly, or monthly")
+
+    schedule = {}
+    if recurring == "weekly":
+        weekday = item.get("recur_weekday")
+        if (
+            isinstance(weekday, bool)
+            or not isinstance(weekday, int)
+            or not 1 <= weekday <= 7
+        ):
+            raise ValueError("recur_weekday must be an integer from 1 to 7")
+        schedule["recur_weekday"] = weekday
+    elif recurring == "monthly":
+        monthday = item.get("recur_monthday")
+        if (
+            isinstance(monthday, bool)
+            or not isinstance(monthday, int)
+            or not 1 <= monthday <= 31
+        ):
+            raise ValueError("recur_monthday must be an integer from 1 to 31")
+        schedule["recur_monthday"] = monthday
+
+    import uuid
+    with _write_lock:
+        if os.path.exists(DATA_FILE):
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        else:
+            data = {"updated": None, "tasks": []}
+        tasks = data.get("tasks", [])
+        norm = text.replace(" ", "").lower()
+        for existing in tasks:
+            if existing.get("recur_source"):
+                continue
+            if existing.get("recurring") != recurring:
+                continue
+            if existing.get("text", "").replace(" ", "").lower() != norm:
+                continue
+            if any(existing.get(key) != value for key, value in schedule.items()):
+                continue
+            return existing, True
+
+        seed = {
+            "id": f"seed_{uuid.uuid4().hex[:12]}",
+            "text": text,
+            "done": False,
+            "created": datetime.now().isoformat(timespec="seconds"),
+            "done_at": None,
+            "source": item.get("source", "user"),
+            "tag": item.get("tag", "personal"),
+            "priority": item.get("priority", "P1"),
+            "recurring": recurring,
+            **schedule,
+        }
+        tasks.append(seed)
+        data["tasks"] = tasks
+        _atomic_write_todos(data)
+    schedule_sync()
+    return seed, False
+
+
 def patch_task(task_id: str, patch: dict) -> dict:
     """锁内 read-modify-write 单条 task 字段（Claude 标完成/取消等远程更新打通用）。
     支持字段：done / done_at / tag / due / priority / text。
@@ -738,6 +807,21 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, json.dumps({"ok": True, "added": added}))
             except Exception as e:
                 self._send(500, json.dumps({"error": str(e)}))
+            return
+        if self.path == "/recurring/add":
+            length = int(self.headers.get("Content-Length", 0))
+            try:
+                item = json.loads(self.rfile.read(length).decode("utf-8"))
+                task, deduped = add_recurring_seed(item)
+                self._send(200, json.dumps({
+                    "ok": True,
+                    "deduped": deduped,
+                    "task": task,
+                }, ensure_ascii=False))
+            except ValueError as exc:
+                self._send(400, json.dumps({"error": str(exc)}, ensure_ascii=False))
+            except Exception as exc:
+                self._send(500, json.dumps({"error": str(exc)}, ensure_ascii=False))
             return
         if self.path == "/todos/add":
             length = int(self.headers.get("Content-Length", 0))

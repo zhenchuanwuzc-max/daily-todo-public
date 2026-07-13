@@ -90,6 +90,43 @@ class RecurringTestCase(unittest.TestCase):
         self.assertTrue(old["done"])
         self.assertTrue(old["auto_skipped"])
 
+    def test_add_recurring_seed_validates_schedule_fields(self):
+        self.write_tasks([])
+        invalid = [
+            {"text": "x", "recurring": "weekly"},
+            {"text": "x", "recurring": "weekly", "recur_weekday": 0},
+            {"text": "x", "recurring": "weekly", "recur_weekday": 8},
+            {"text": "x", "recurring": "weekly", "recur_weekday": True},
+            {"text": "x", "recurring": "monthly"},
+            {"text": "x", "recurring": "monthly", "recur_monthday": 0},
+            {"text": "x", "recurring": "monthly", "recur_monthday": 32},
+            {"text": "x", "recurring": "monthly", "recur_monthday": True},
+            {"text": "x", "recurring": "yearly"},
+        ]
+        for item in invalid:
+            with self.subTest(item=item):
+                with self.assertRaises(ValueError):
+                    server.add_recurring_seed(item)
+
+    def test_add_recurring_seed_writes_expected_schema_and_dedupes(self):
+        self.write_tasks([])
+        item = {
+            "text": "CPSC weekly",
+            "tag": "work",
+            "priority": "P1",
+            "recurring": "weekly",
+            "recur_weekday": 1,
+        }
+        seed, deduped = server.add_recurring_seed(item)
+        duplicate, duplicate_deduped = server.add_recurring_seed(item)
+        self.assertFalse(deduped)
+        self.assertTrue(duplicate_deduped)
+        self.assertEqual(seed["id"], duplicate["id"])
+        self.assertEqual(seed["recurring"], "weekly")
+        self.assertEqual(seed["recur_weekday"], 1)
+        self.assertNotIn("due", seed)
+        self.assertEqual(len(self.read_tasks()), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
