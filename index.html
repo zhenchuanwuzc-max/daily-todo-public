@@ -569,6 +569,10 @@
   .recur-seed .rs-text {
     flex: 1; color: var(--text-2);
   }
+  .recur-seed .rs-schedule {
+    font-size: 10px; color: var(--accent);
+    white-space: nowrap;
+  }
   .recur-seed .rs-pri {
     font-size: 10px; padding: 0 5px; border-radius: 3px;
     background: var(--bg-2); color: var(--muted);
@@ -599,6 +603,7 @@
     padding: 8px 4px 0; margin-top: 2px;
   }
   .recur-add-form.show { display: flex; }
+  .recur-add-form [hidden] { display: none; }
   .recur-add-form input {
     flex: 1; padding: 5px 10px; font-size: 12px;
     border: 1px solid var(--line); border-radius: 6px;
@@ -1512,26 +1517,38 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ============== 未来项弹窗 ==============
+function scheduleLabel(seed) {
+  if (seed.recurring === "daily") return "每天";
+  if (seed.recurring === "weekly") {
+    return `每周${["", "一", "二", "三", "四", "五", "六", "日"][seed.recur_weekday] || "?"}`;
+  }
+  if (seed.recurring === "monthly") return `每月 ${seed.recur_monthday} 日`;
+  return "未知周期";
+}
+
 function renderRecurSection() {
-  const seeds = state.tasks.filter(t => t.recurring === "daily" && !t.recur_source);
+  const seeds = state.tasks.filter(t =>
+    ["daily", "weekly", "monthly"].includes(t.recurring) && !t.recur_source
+  );
   seeds.sort((a, b) => (a.created || "").localeCompare(b.created || ""));
 
   let html = `
     <div class="recur-section">
       <div class="recur-section-head">
-        <span class="rs-title">📌 每日任务</span>
+        <span class="rs-title">📌 重复任务</span>
         <span class="rs-count">${seeds.length}</span>
-        <span class="rs-hint">每天 00:01 自动入列</span>
+        <span class="rs-hint">命中日期 00:01 自动入列</span>
       </div>
       <ul>`;
   if (seeds.length === 0) {
-    html += `<li class="recur-seed" style="justify-content:center;color:var(--muted);">还没设置每日任务</li>`;
+    html += `<li class="recur-seed" style="justify-content:center;color:var(--muted);">还没设置重复任务</li>`;
   } else {
     for (const s of seeds) {
       html += `
         <li class="recur-seed" data-id="${s.id}">
           <span class="rs-icon">🔁</span>
           <span class="rs-text">${escapeHtml(s.text)}</span>
+          <span class="rs-schedule">${scheduleLabel(s)}</span>
           <span class="rs-pri">${s.priority || "P1"}</span>
           <span class="rs-tag">${s.tag || "personal"}</span>
           <button class="rs-del" data-action="del-seed" data-id="${s.id}" title="删除（历史实例保留）">×</button>
@@ -1540,9 +1557,24 @@ function renderRecurSection() {
   }
   html += `
       </ul>
-      <button class="recur-add-toggle" id="recurAddToggle">+ 添加每日任务</button>
+      <button class="recur-add-toggle" id="recurAddToggle">+ 添加重复任务</button>
       <div class="recur-add-form" id="recurAddForm">
-        <input id="recurNewText" type="text" placeholder="例如「每日三练」…" maxlength="200">
+        <input id="recurNewText" type="text" placeholder="例如「每周项目复盘」…" maxlength="200">
+        <select id="recurNewFrequency" title="重复频率">
+          <option value="daily">每日</option>
+          <option value="weekly">每周</option>
+          <option value="monthly">每月</option>
+        </select>
+        <select id="recurNewWeekday" title="星期" hidden>
+          <option value="1">周一</option>
+          <option value="2">周二</option>
+          <option value="3">周三</option>
+          <option value="4">周四</option>
+          <option value="5">周五</option>
+          <option value="6">周六</option>
+          <option value="7">周日</option>
+        </select>
+        <select id="recurNewMonthday" title="每月日期" hidden></select>
         <select id="recurNewPri" title="优先级">
           <option value="P0">P0</option>
           <option value="P1" selected>P1</option>
@@ -1560,23 +1592,19 @@ function renderRecurSection() {
   return html;
 }
 
-function addRecurSeed(text, priority, tag) {
-  if (!text) return;
-  const t = {
-    id: "seed_" + Date.now() + Math.floor(Math.random() * 1000),
-    text,
-    done: false,
-    created: new Date().toISOString().slice(0, 19),
-    done_at: null,
-    source: "user",
-    tag: tag || "personal",
-    priority: priority || "P1",
-    recurring: "daily"
-  };
-  state.tasks.push(t);
-  save();
-  // 立即触发后端 ensure：发一次 GET 强制服务器看到新种子并膨胀今日实例
-  setTimeout(() => fetch("/ensure-recurring", { method: "POST" }).catch(() => {}), 200);
+async function addRecurSeed(text, priority, tag, recurring, weekday, monthday) {
+  const payload = { text, priority, tag, recurring, source: "user" };
+  if (recurring === "weekly") payload.recur_weekday = Number(weekday);
+  if (recurring === "monthly") payload.recur_monthday = Number(monthday);
+  const response = await fetch("/recurring/add", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "添加重复任务失败");
+  await fetch("/ensure-recurring", { method: "POST" });
+  await load();
 }
 
 function deleteRecurSeed(seedId) {
@@ -1584,8 +1612,8 @@ function deleteRecurSeed(seedId) {
   if (!seed) return;
   const hasInstances = state.tasks.some(t => t.recur_source === seedId);
   const msg = hasInstances
-    ? "删除每日任务模板？\n已生成的历史实例（含未完成的）会保留为普通任务。"
-    : "删除每日任务模板？";
+    ? "删除重复任务模板？\n已生成的历史实例（含未完成的）会保留为普通任务。"
+    : "删除重复任务模板？";
   if (!confirm(msg)) return;
   state.tasks = state.tasks.filter(t => t.id !== seedId);
   save();
@@ -1596,22 +1624,55 @@ function bindRecurSection(root) {
   const form = root.querySelector("#recurAddForm");
   const addBtn = root.querySelector("#recurAddBtn");
   const addInput = root.querySelector("#recurNewText");
+  const frequency = root.querySelector("#recurNewFrequency");
+  const weekday = root.querySelector("#recurNewWeekday");
+  const monthday = root.querySelector("#recurNewMonthday");
+
+  if (monthday) {
+    monthday.innerHTML = Array.from(
+      { length: 31 }, (_, index) => `<option value="${index + 1}">${index + 1} 日</option>`
+    ).join("");
+    monthday.value = "13";
+  }
+  function syncScheduleControls() {
+    if (!frequency || !weekday || !monthday) return;
+    weekday.hidden = frequency.value !== "weekly";
+    monthday.hidden = frequency.value !== "monthly";
+  }
+  if (frequency) {
+    frequency.addEventListener("change", syncScheduleControls);
+    syncScheduleControls();
+  }
 
   if (toggle && form) {
     toggle.addEventListener("click", () => {
       const showing = form.classList.toggle("show");
-      toggle.textContent = showing ? "× 收起" : "+ 添加每日任务";
+      toggle.textContent = showing ? "× 收起" : "+ 添加重复任务";
       if (showing && addInput) addInput.focus();
     });
   }
   if (addBtn && addInput) {
-    addBtn.addEventListener("click", () => {
+    addBtn.addEventListener("click", async () => {
       const text = addInput.value.trim();
       const pri = root.querySelector("#recurNewPri").value;
       const tag = root.querySelector("#recurNewTag").value;
       if (!text) return;
-      addRecurSeed(text, pri, tag);
-      addInput.value = "";
+      addBtn.disabled = true;
+      try {
+        await addRecurSeed(
+          text,
+          pri,
+          tag,
+          frequency.value,
+          weekday.value,
+          monthday.value
+        );
+        addInput.value = "";
+      } catch (error) {
+        alert(error.message || "添加重复任务失败");
+      } finally {
+        addBtn.disabled = false;
+      }
     });
     addInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -1632,9 +1693,11 @@ function renderFuture() {
 
   const root = document.getElementById("futureList");
   root.innerHTML = "";
-  const seedCount = state.tasks.filter(t => t.recurring === "daily" && !t.recur_source).length;
+  const seedCount = state.tasks.filter(t =>
+    ["daily", "weekly", "monthly"].includes(t.recurring) && !t.recur_source
+  ).length;
   const sumParts = [`${items.length} 日常`];
-  if (seedCount > 0) sumParts.push(`${seedCount} 每日任务`);
+  if (seedCount > 0) sumParts.push(`${seedCount} 重复任务`);
   document.getElementById("futureSummary").textContent = sumParts.join(" · ");
 
   if (items.length === 0) {
@@ -1642,7 +1705,7 @@ function renderFuture() {
     note.className = "future-empty";
     note.innerHTML = '还没有未来计划项<br>添加事项时把日期选成未来即可';
     root.appendChild(note);
-    // 即便没有未来项，也要在底部展示每日任务区块（管理入口）
+    // 即便没有未来项，也要在底部展示重复任务区块（管理入口）
     const recurWrap = document.createElement("div");
     recurWrap.innerHTML = renderRecurSection();
     root.appendChild(recurWrap);
@@ -1678,7 +1741,7 @@ function renderFuture() {
     root.appendChild(wrap);
   }
 
-  // 每日任务区块永远放在最底（管理入口，不喧宾）
+  // 重复任务区块永远放在最底（管理入口，不喧宾）
   const recurWrap = document.createElement("div");
   recurWrap.innerHTML = renderRecurSection();
   root.appendChild(recurWrap);

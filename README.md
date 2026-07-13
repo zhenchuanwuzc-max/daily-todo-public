@@ -16,3 +16,28 @@ git clone <this-repo> ~/daily-todo
 git clone <your-private-data-repo> ~/daily-todo-data
 cd ~/daily-todo && ./setup-on-this-mac.sh
 ```
+
+## Recurring tasks
+
+Recurring templates are stored beside ordinary tasks and generate normal task
+instances at 00:01 Asia/Shanghai when their schedule matches:
+
+```json
+{"text":"Daily","recurring":"daily"}
+{"text":"Monday","recurring":"weekly","recur_weekday":1}
+{"text":"Month day 13","recurring":"monthly","recur_monthday":13}
+```
+
+Weekly values use ISO weekdays (`1` is Monday, `7` is Sunday). Monthly values
+are calendar days `1` through `31`; a missing date is skipped rather than moved
+to the end of the month.
+
+Create templates through the locked endpoint:
+
+```text
+POST /recurring/add
+```
+
+The request accepts `text`, `tag`, `priority`, `source`, `recurring`, and the
+relevant schedule field. `POST /todos/add` remains limited to ordinary tasks so
+callers cannot accidentally turn a one-time task into a recurring template.
