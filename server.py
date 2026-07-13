@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
-from datetime import datetime
+from datetime import date, datetime
 
 try:
     from zoneinfo import ZoneInfo
@@ -477,7 +477,7 @@ def patch_task(task_id: str, patch: dict) -> dict:
     return target
 
 
-# ============== 每日重复任务 ==============
+# ============== 重复任务 ==============
 # 数据模型：
 #   种子 task   = 普通 task 加 `recurring: "daily"` 字段（不参与 done 状态）
 #   今日实例    = task.id = f"recur:{seed.id}:{YYYY-MM-DD}"，带 `recur_source: seed.id`
@@ -487,9 +487,32 @@ def patch_task(task_id: str, patch: dict) -> dict:
 # 幂等：state.last_generated[seed.id] + tasks 里同 id 二次去重，挡 iCloud 并发
 
 
+def schedule_matches(seed: dict, run_date: date) -> bool:
+    """Return whether a recurring seed should generate on run_date."""
+    recurring = seed.get("recurring")
+    if recurring == "daily":
+        return True
+    if recurring == "weekly":
+        value = seed.get("recur_weekday")
+        return (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and value == run_date.isoweekday()
+        )
+    if recurring == "monthly":
+        value = seed.get("recur_monthday")
+        return (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and value == run_date.day
+        )
+    return False
+
+
 def ensure_recurring_today() -> bool:
     """检查所有种子，生成今日缺失的实例 + 自动 skip 过期未完成实例。返回是否有写入。"""
     today = today_str()
+    run_date = date.fromisoformat(today)
     state = read_state()
     last_gen = state.get("last_generated") or {}
     state["last_generated"] = last_gen
@@ -516,7 +539,11 @@ def ensure_recurring_today() -> bool:
                 t["skipped_for"] = inst_date
                 skipped += 1
 
-        seeds = [t for t in tasks if t.get("recurring") == "daily" and not t.get("recur_source")]
+        seeds = [
+            t for t in tasks
+            if t.get("recurring") in {"daily", "weekly", "monthly"}
+            and not t.get("recur_source")
+        ]
         if not seeds and skipped == 0:
             write_state(state)
             return False
@@ -524,6 +551,8 @@ def ensure_recurring_today() -> bool:
         existing_ids = {t.get("id") for t in tasks}
 
         for seed in seeds:
+            if not schedule_matches(seed, run_date):
+                continue
             seed_id = seed.get("id")
             if not seed_id:
                 continue
