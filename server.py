@@ -400,6 +400,37 @@ def write_data(data):
     schedule_sync()
 
 
+def reorder_tasks(item):
+    """Persist only ordering, against current tasks under the existing write lock."""
+    ids = item.get("ids") if isinstance(item, dict) else None
+    if (not isinstance(ids, list) or len(ids) < 2
+            or any(not isinstance(i, str) or not i for i in ids)
+            or len(set(ids)) != len(ids)):
+        raise ValueError("ids must contain at least two unique task IDs")
+    with _write_lock:
+        data = read_data()
+        by_id = {t["id"]: t for t in data.get("tasks", [])}
+        selected = [by_id.get(i) for i in ids]
+        today = today_str()
+        for task in selected:
+            if (task is None or task.get("done")
+                    or task.get("source") == "claude-suggest"
+                    or (task.get("due") or "") > today
+                    or (task.get("recurring") in ("daily", "weekly", "monthly")
+                        and not task.get("recur_source"))):
+                raise ValueError("列表已变化，请刷新后重新排序")
+        def group(task):
+            priority = task.get("priority")
+            return priority if priority in ("P0", "P1", "P2", "P3") else "PN"
+        if len({group(t) for t in selected}) != 1:
+            raise ValueError("请在同一优先级内排序")
+        for position, task in enumerate(selected):
+            task["sort_order"] = position
+        _atomic_write_todos(data)
+    schedule_sync()
+    return {"ok": True, "updated": data["updated"]}
+
+
 def add_single_task(item: dict) -> dict:
     """锁内 read-append-write 单条普通 task（Claude 打通用）。
     防 recur 污染 + 同 text 未完成幂等去重 + 跨机 UUID id。
@@ -758,6 +789,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, '{"error":"not found"}')
 
     def do_POST(self):
+        if self.path == "/todos/reorder":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                item = json.loads(self.rfile.read(length).decode("utf-8"))
+                self._send(200, json.dumps(reorder_tasks(item), ensure_ascii=False))
+            except ValueError as exc:
+                self._send(400, json.dumps({"error": str(exc)}, ensure_ascii=False))
+            except Exception as exc:
+                self._send(500, json.dumps({"error": str(exc)}, ensure_ascii=False))
+            return
         if self.path == "/todos":
             length = int(self.headers.get("Content-Length", 0))
             try:

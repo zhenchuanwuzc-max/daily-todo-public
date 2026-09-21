@@ -141,10 +141,10 @@ def main() -> None:
     window = webview.create_window(
         "每日待办",
         URL,
-        width=880,
+        width=1040,
         height=840,
         resizable=True,
-        min_size=(480, 540),
+        min_size=(920, 540),
     )
     _window_ref[0] = window
     webview.start(setup_app_menu)
