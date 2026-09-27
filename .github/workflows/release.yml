@@ -1,0 +1,56 @@
+name: Release macOS app
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            'setuptools==58.0.4' 'wheel' \
+            'py2app==0.28.9' 'pywebview==6.2.1' \
+            'APScheduler==3.11.3' 'tzlocal==5.3.1' \
+            'pyobjc-core==11.1' \
+            'pyobjc-framework-Cocoa==11.1' \
+            'pyobjc-framework-Quartz==11.1' \
+            'pyobjc-framework-Security==11.1' \
+            'pyobjc-framework-UniformTypeIdentifiers==11.1' \
+            'pyobjc-framework-WebKit==11.1'
+      - name: Test and build from source
+        run: |
+          set -euo pipefail
+          python -m py_compile server.py
+          python -m unittest discover -s tests -v
+          test "$(cat VERSION)" = "${GITHUB_REF_NAME#v}"
+          python setup.py py2app
+          app='dist/每日待办.app'
+          test -d "$app"
+          test "$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")" = "${GITHUB_REF_NAME#v}"
+          cmp server.py "$app/Contents/Resources/server.py"
+          cmp index.html "$app/Contents/Resources/index.html"
+          python -c "import zipfile; z=zipfile.ZipFile('$app/Contents/Resources/lib/python39.zip'); assert b'fetch_public_release' in z.read('server.pyc'), 'updater fix missing from embedded server module'"
+          lipo -archs "$app/Contents/MacOS/每日待办" | grep -q 'x86_64'
+          lipo -archs "$app/Contents/MacOS/每日待办" | grep -q 'arm64'
+          codesign --verify --deep --strict "$app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "daily-todo-${GITHUB_REF_NAME#v}-macos-universal.zip"
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: daily-todo-*-macos-universal.zip
+          body: |
+            修复“立即更新”因 GitHub 匿名 API 限流而返回 HTTP 403 的问题。
+            公开版本改用 Release 页面获取版本和安装包，并在安装前校验 SHA-256。
+            本版从源码重新打包，确保 App 实际运行的内嵌 Python 模块也包含修复。
