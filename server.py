@@ -14,6 +14,11 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import hashlib
+import re
+import zipfile
+from html.parser import HTMLParser
+from urllib.parse import quote, unquote, urlsplit
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from datetime import date, datetime
 
@@ -169,9 +174,11 @@ def read_gh_token() -> str:
 
 
 def fetch_latest_release() -> dict:
-    """用 token 调 GitHub API 拿最新 release"""
+    """公开仓库走 release 网页，避免共享出口的匿名 API 速率限制。"""
     import urllib.request
     token = read_gh_token()
+    if not token:
+        return fetch_public_release()
     url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
     req = urllib.request.Request(url, headers={
         "Accept": "application/vnd.github+json",
@@ -181,6 +188,67 @@ def fetch_latest_release() -> dict:
         req.add_header("Authorization", f"Bearer {token}")
     with urllib.request.urlopen(req, timeout=8) as resp:
         return json.loads(resp.read().decode("utf-8"))
+
+
+class _ReleaseAssetsParser(HTMLParser):
+    def __init__(self, tag: str):
+        super().__init__()
+        self.prefix = f"/{GITHUB_REPO}/releases/download/{quote(tag, safe='')}/"
+        self.rows = []
+        self.row = None
+
+    def handle_starttag(self, name, attrs):
+        attrs = dict(attrs)
+        if name == "li":
+            self.row = {"url": None, "digest": None}
+        if self.row is None:
+            return
+        href = attrs.get("href", "")
+        if name == "a" and href.startswith(self.prefix) and href.lower().endswith(".zip"):
+            self.row["url"] = "https://github.com" + href
+        digest = attrs.get("value", "")
+        if name == "clipboard-copy" and re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest):
+            self.row["digest"] = digest
+
+    def handle_endtag(self, name):
+        if name == "li" and self.row is not None:
+            if self.row["url"]:
+                self.rows.append(self.row)
+            self.row = None
+
+
+def fetch_public_release() -> dict:
+    import urllib.request
+    latest_url = f"https://github.com/{GITHUB_REPO}/releases/latest"
+    with urllib.request.urlopen(urllib.request.Request(latest_url, headers={
+        "User-Agent": "daily-todo-app",
+    }), timeout=15) as resp:
+        release_url = resp.geturl()
+    prefix = f"/{GITHUB_REPO}/releases/tag/"
+    parsed = urlsplit(release_url)
+    if parsed.netloc != "github.com" or not parsed.path.startswith(prefix):
+        raise RuntimeError("无法确认最新版本地址")
+    tag = unquote(parsed.path[len(prefix):])
+    if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+        raise RuntimeError("最新版本号格式异常")
+
+    assets_url = f"https://github.com/{GITHUB_REPO}/releases/expanded_assets/{quote(tag, safe='')}"
+    with urllib.request.urlopen(urllib.request.Request(assets_url, headers={
+        "User-Agent": "daily-todo-app",
+    }), timeout=15) as resp:
+        parser = _ReleaseAssetsParser(tag)
+        parser.feed(resp.read().decode("utf-8"))
+    assets = []
+    for row in parser.rows:
+        if not row["digest"]:
+            continue  # 下载包必须带 GitHub 公布的 SHA-256
+        url = row["url"]
+        assets.append({"name": unquote(urlsplit(url).path.rsplit("/", 1)[-1]),
+                       "url": url, "browser_download_url": url,
+                       "digest": row["digest"]})
+    if not assets:
+        raise RuntimeError("release 中没有带 SHA-256 的 .zip 安装包")
+    return {"tag_name": tag, "html_url": release_url, "assets": assets}
 
 
 _progress_lock = threading.Lock()
@@ -197,16 +265,17 @@ def get_progress() -> dict:
         return dict(_progress)
 
 
-def download_asset(asset_api_url: str, dest_path: str) -> None:
-    """下载 release asset 二进制（私仓需要 token + 特殊 Accept），并实时更新进度"""
+def download_asset(asset_url: str, dest_path: str, digest: str = "") -> None:
+    """下载 release 附件、更新进度，并校验 GitHub 公布的 SHA-256。"""
     import urllib.request
     token = read_gh_token()
-    req = urllib.request.Request(asset_api_url, headers={
+    req = urllib.request.Request(asset_url, headers={
         "Accept": "application/octet-stream",
         "User-Agent": "daily-todo-app",
     })
-    if token:
+    if token and urlsplit(asset_url).netloc == "api.github.com":
         req.add_header("Authorization", f"Bearer {token}")
+    sha = hashlib.sha256()
     with urllib.request.urlopen(req, timeout=180) as resp:
         total = int(resp.headers.get("Content-Length", 0))
         _set_progress(status="downloading", downloaded=0, total=total, error=None)
@@ -216,8 +285,15 @@ def download_asset(asset_api_url: str, dest_path: str) -> None:
                 if not chunk:
                     break
                 f.write(chunk)
+                sha.update(chunk)
                 with _progress_lock:
                     _progress["downloaded"] += len(chunk)
+    if digest and sha.hexdigest().lower() != digest.removeprefix("sha256:").lower():
+        os.unlink(dest_path)
+        raise RuntimeError("安装包 SHA-256 校验失败")
+    if not zipfile.is_zipfile(dest_path):
+        os.unlink(dest_path)
+        raise RuntimeError("下载内容不是 ZIP 安装包")
     _set_progress(status="downloaded")
 
 
@@ -249,7 +325,7 @@ def _do_install_update(rel: dict, asset: dict) -> None:
     os.makedirs(update_dir, exist_ok=True)
 
     zip_path = os.path.join(update_dir, asset["name"])
-    download_asset(asset["url"], zip_path)
+    download_asset(asset["url"], zip_path, asset.get("digest", ""))
 
     _set_progress(status="installing")
 

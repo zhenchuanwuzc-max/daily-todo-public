@@ -32,14 +32,21 @@
     font-size: 14px;
   }
   .app-shell { max-width: 1080px; margin: 0 auto; }
-  .app-toolbar { margin-left: 184px; margin-bottom: 24px; }
+  .app-titlebar { margin-left: 184px; }
+  .app-titlebar header { margin-bottom: 4px; }
+  .app-toolbar {
+    position: sticky; top: 0; z-index: 30;
+    margin-left: 184px; margin-bottom: 12px; padding: 12px 0;
+    background: var(--bg);
+  }
+  .app-toolbar.is-stuck { box-shadow: 0 1px 0 var(--line); }
   .app-layout {
     display: grid; grid-template-columns: 160px minmax(0, 1fr);
     gap: 24px; align-items: start;
   }
   .wrap { width: 100%; min-width: 0; }
   .priority-nav { position: sticky; top: 24px; }
-  .priority-nav-title { color: var(--muted); font-size: 11px; line-height: 20px; padding: 0 10px 8px; }
+  .priority-nav-title { color: var(--muted); font-size: 11px; line-height: 20px; padding: 8px 10px; }
   .priority-nav-items { display: flex; flex-direction: column; gap: 4px; }
   .priority-link {
     display: flex; align-items: center; gap: 8px; width: 100%;
@@ -102,8 +109,10 @@
   /* 分组段落 */
   .group { margin-bottom: 24px; }
   .group-head {
+    position: sticky; top: var(--toolbar-height, 76px); z-index: 10;
+    background: var(--bg);
     display: flex; align-items: baseline; gap: 10px;
-    padding: 0 4px 8px; line-height: 20px;
+    padding: 8px 4px; line-height: 20px;
     border-bottom: 1px solid var(--line);
     margin-bottom: 2px;
   }
@@ -266,6 +275,7 @@
     border-radius: 8px; padding: 14px 16px; margin-bottom: 28px;
   }
   .group.SG .pri-dot { background: #d9a441; }
+  .group.SG .group-head { background: #fdf9f0; }
   .group.SG .label { color: #d9a441; }
 
   .empty {
@@ -690,7 +700,7 @@
 </head>
 <body>
 <div class="app-shell">
-<div class="app-toolbar">
+<div class="app-titlebar">
   <header>
     <h1>每日待办<span class="total" id="total"></span></h1>
     <div class="header-right">
@@ -699,6 +709,8 @@
       <button class="btn-icon" id="reviewBtn" title="周复盘">📊 复盘</button>
     </div>
   </header>
+</div>
+<div class="app-toolbar">
 
   <div class="update-banner" id="updateBanner">
     <span class="ub-text">🆕 新版本 <span class="ub-ver" id="updateVer">—</span> 已发布</span>
@@ -781,10 +793,17 @@ let navTarget = null;
 let navScrollFrame = null;
 
 function navScrollOffset() {
-  return 24;
+  return document.querySelector(".app-toolbar").getBoundingClientRect().height;
 }
+const toolbarObserver = new ResizeObserver(() => {
+  document.documentElement.style.setProperty("--toolbar-height", navScrollOffset() + "px");
+  scheduleNavHighlight();
+});
+toolbarObserver.observe(document.querySelector(".app-toolbar"));
 
 function highlightPriorityNav() {
+  const toolbar = document.querySelector(".app-toolbar");
+  toolbar.classList.toggle("is-stuck", toolbar.getBoundingClientRect().top <= 0);
   const groups = Array.from(document.querySelectorAll("#groups > .group"));
   if (navTarget && !groups.some(group => group.dataset.group === navTarget)) navTarget = null;
   let active = navTarget;
@@ -934,7 +953,7 @@ function addDragHandle(li) {
     const scroll = () => {
       if (!taskDrag) return;
       const y = taskDrag.y;
-      const delta = y < 70 ? -12 : y > innerHeight - 70 ? 12 : 0;
+      const delta = y < navScrollOffset() + 48 ? -12 : y > innerHeight - 70 ? 12 : 0;
       if (delta && taskDrag.moved) { window.scrollBy(0, delta); placeDraggedTask(y); }
       taskDrag.frame = requestAnimationFrame(scroll);
     };
