@@ -28,7 +28,8 @@ try:
 except Exception:
     TZ = None
 
-PORT = 8766
+# 端口可由 TODO_PORT 覆盖（仅供自动化测试起隔离实例用；不设置则与以前一致 = 8766）
+PORT = int(os.environ.get("TODO_PORT", "8766"))
 
 # 数据目录走 TODO_DATA_DIR env，回退 ~/daily-todo-data 再回退 ~/daily-todo（代码在脚本所在处，数据分仓）
 DATA_DIR = os.environ.get("TODO_DATA_DIR", "")
