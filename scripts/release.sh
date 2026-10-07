@@ -120,13 +120,14 @@ preflight() {
     gh auth status >/dev/null 2>&1 || fail "gh 未登录，无法发版"
     [ -z "$(git status --porcelain)" ] || fail "工作区有未提交改动，先提交再上线"
     [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ] || fail "只能在 main 分支上线"
-    git fetch -q origin main --tags || fail "git fetch 失败"
+    # 标签以公开仓库为准（本地可能残留旧历史的同名标签）
+    git fetch -q --force origin main --tags || fail "git fetch 失败（网络？）"
     [ "$(git rev-list --count HEAD..origin/main)" = 0 ] || fail "本地落后公开仓库，先 git pull --rebase 再上线"
 }
 
-# 下一个版本号 = max(VERSION 文件, 所有 v* 标签) 的补丁号 +1（避开历史遗留的空标签）
+# 下一个版本号 = max(VERSION 文件, 公开仓库所有 v* 标签) 的补丁号 +1（避开历史遗留的空标签）
 next_version() {
-    { cat "${DIR}/VERSION"; git -C "$DIR" tag -l 'v*' | sed 's/^v//'; } \
+    { cat "${DIR}/VERSION"; git -C "$DIR" ls-remote --tags origin 'v*' | sed -n 's#.*refs/tags/v\([^^]*\)$#\1#p'; } \
         | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1 \
         | awk -F. '{printf "%d.%d.%d", $1, $2, $3 + 1}'
 }
