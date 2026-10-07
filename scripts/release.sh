@@ -1,30 +1,31 @@
 #!/bin/bash
-# daily-todo 上线脚本：测试全过 → 重启线上服务 → 验证线上可用
+# daily-todo 上线脚本（2026-10-07 起的新流程）：
+#   测试 → 打版本标签 → GitHub Actions 打包发布 → 装到本机 → 验证线上 → 不过就退回旧版
 #
-#   scripts/release.sh               跑全部测试，通过后重启线上服务并验证
-#   scripts/release.sh --no-restart  只跑测试，不重启（不碰线上）
+#   scripts/release.sh               完整上线（会推送到公开仓库 + 发 GitHub Release + 替换本机 App）
+#   scripts/release.sh --no-restart  只跑测试，不发版、不碰线上
 #
-# 线上服务的真实运行方式（2026-10-07 核实）：
-#   ~/Applications/每日待办.app（py2app 桌面壳，bundle id com.ocean.dailytodo）。
-#   launchd com.ocean.daily-todo 只在每天 09:00 `open -a` 这个 App，本身不常驻；
-#   App 内线程跑 server.py，监听 127.0.0.1:8766。
-#   ⚠️ App 里带的是打包时那份 server.py/index.html 副本；重启只会重新拉起已安装的 App，
-#      不会把本仓库的新代码装进去——要让新代码生效需重新打包（setup-on-this-mac.sh / GitHub release 走 App 内更新）。
+# 线上 = ~/Applications/每日待办.app（py2app 桌面壳，App 内线程跑 server.py，127.0.0.1:8766）。
+# App 里带的是打包时的代码副本，所以「上线」必须重新打包；打包统一走 .github/workflows/release.yml
+# （CI 里会再跑一遍全部测试，并校验版本号/双架构/签名），其他电脑通过 App 内「立即更新」拿到同一个包。
 #
-# 测试不含 tests/browser_reorder.py：它依赖 playwright + 浏览器，本机 venv/系统 python 均未安装，
-# 且不是 unittest 用例（文件名不是 test_*.py），不能稳定跑，故不纳入 release 门禁。
+# 测试不含 tests/browser_reorder.py：依赖 playwright + 浏览器，且不是 unittest 用例。
 #
 # 可选环境变量：
 #   DAILY_TODO_LIVE_PORT  线上端口（默认 8766）
-#   DAILY_TODO_POLL_SECS  重启后轮询秒数（默认 10）
+#   DAILY_TODO_POLL_SECS  重启后轮询秒数（默认 15）
+#   DAILY_TODO_CI_MINUTES 等 GitHub 打包的上限分钟数（默认 20）
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP="${HOME}/Applications/每日待办.app"
 APP_BUNDLE_ID="com.ocean.dailytodo"
+GITHUB_REPO="zhenchuanwuzc-max/daily-todo-public"
 LIVE_PORT="${DAILY_TODO_LIVE_PORT:-8766}"
 LIVE_URL="http://127.0.0.1:${LIVE_PORT}"
-POLL_SECS="${DAILY_TODO_POLL_SECS:-10}"
+POLL_SECS="${DAILY_TODO_POLL_SECS:-15}"
+CI_MINUTES="${DAILY_TODO_CI_MINUTES:-20}"
+BACKUP_DIR="${DIR}/.release-backup"
 
 notify() {
     osascript -e "display notification \"$1\" with title \"daily-todo release\"" >/dev/null 2>&1 || true
@@ -111,20 +112,107 @@ start_live() {
     fi
 }
 
-restart_live() {
-    echo "==> 重启线上服务（${APP}，端口 ${LIVE_PORT}）"
+
+# ---------- 0. 发版前检查 ----------
+preflight() {
+    cd "$DIR"
+    command -v gh >/dev/null || fail "没有 gh 命令，无法发版"
+    gh auth status >/dev/null 2>&1 || fail "gh 未登录，无法发版"
+    [ -z "$(git status --porcelain)" ] || fail "工作区有未提交改动，先提交再上线"
+    [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ] || fail "只能在 main 分支上线"
+    git fetch -q origin main --tags || fail "git fetch 失败"
+    [ "$(git rev-list --count HEAD..origin/main)" = 0 ] || fail "本地落后公开仓库，先 git pull --rebase 再上线"
+}
+
+# 下一个版本号 = max(VERSION 文件, 所有 v* 标签) 的补丁号 +1（避开历史遗留的空标签）
+next_version() {
+    { cat "${DIR}/VERSION"; git -C "$DIR" tag -l 'v*' | sed 's/^v//'; } \
+        | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1 \
+        | awk -F. '{printf "%d.%d.%d", $1, $2, $3 + 1}'
+}
+
+# ---------- 2. 打标签 → 等 GitHub 打包 ----------
+publish() {
+    NEW_VERSION="$(next_version)"
+    [ -n "$NEW_VERSION" ] || fail "算不出新版本号"
+    local tag="v${NEW_VERSION}"
+    echo "==> 发版 ${tag}"
+    echo "$NEW_VERSION" > "${DIR}/VERSION"
+    git -C "$DIR" commit -q -m "release: ${tag}" -- VERSION
+    git -C "$DIR" push -q origin main || fail "推送 main 失败"
+    git -C "$DIR" tag "$tag"
+    git -C "$DIR" push -q origin "$tag" || fail "推送标签 ${tag} 失败"
+
+    echo "==> 等 GitHub 打包（上限 ${CI_MINUTES} 分钟）"
+    local run_id="" i
+    for ((i = 0; i < 30; i++)); do
+        run_id="$(gh run list -R "$GITHUB_REPO" --workflow release.yml --branch "$tag" \
+            --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)"
+        [ -n "$run_id" ] && break
+        sleep 2
+    done
+    [ -n "$run_id" ] || fail "60 秒内没等到 ${tag} 的打包任务；本机 App 未改动"
+    if ! timeout_run $((CI_MINUTES * 60)) gh run watch "$run_id" -R "$GITHUB_REPO" --exit-status --interval 10 >/dev/null; then
+        fail "GitHub 打包失败或超时（gh run view ${run_id} -R ${GITHUB_REPO} --log-failed）；Release 未发布，本机 App 未改动"
+    fi
+    gh release view "$tag" -R "$GITHUB_REPO" --json assets -q '.assets[].name' | grep -q '\.zip$' \
+        || fail "${tag} 的 Release 里没有安装包"
+    echo "  ${tag} 已发布"
+}
+
+timeout_run() {  # $1=秒，其余为命令；macOS 没有 timeout，用后台进程兜底
+    local secs="$1"; shift
+    "$@" & local pid=$!
+    ( sleep "$secs" && kill "$pid" 2>/dev/null ) & local watcher=$!
+    local rc=0
+    wait "$pid" || rc=$?
+    kill "$watcher" 2>/dev/null || true
+    return "$rc"
+}
+
+# ---------- 3. 装到本机（先备份旧版，失败可退回） ----------
+install_local() {
+    local tag="v${NEW_VERSION}" work
+    work="$(mktemp -d "${TMPDIR:-/tmp}/daily-todo-install.XXXXXX")"
+    echo "==> 下载并安装 ${tag}"
+    gh release download "$tag" -R "$GITHUB_REPO" -p '*.zip' -D "$work" >/dev/null || fail "下载 ${tag} 安装包失败；本机 App 未改动"
+    ditto -x -k "$work"/*.zip "$work/extracted" || fail "解压安装包失败；本机 App 未改动"
+    NEW_APP_PATH="$(find "$work/extracted" -maxdepth 2 -name '*.app' -type d | head -1)"
+    [ -n "$NEW_APP_PATH" ] || fail "安装包里没有 .app；本机 App 未改动"
+    xattr -dr com.apple.quarantine "$NEW_APP_PATH" 2>/dev/null || true
+
     stop_live
+    rm -rf "$BACKUP_DIR"; mkdir -p "$BACKUP_DIR"
+    if [ -d "$APP" ]; then
+        mv "$APP" "$BACKUP_DIR/"
+        HAS_BACKUP=1
+    fi
+    mkdir -p "$(dirname "$APP")"
+    mv "$NEW_APP_PATH" "$APP"
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" || true
+    rm -rf "$work"
     start_live
 }
 
-# ---------- 3. 验证线上 ----------
+rollback_local() {
+    [ "${HAS_BACKUP:-0}" = 1 ] || return 0
+    echo "==> 退回旧版 App" >&2
+    stop_live || true
+    rm -rf "$APP"
+    mv "$BACKUP_DIR/$(basename "$APP")" "$APP"
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" || true
+    start_live
+}
+
+# ---------- 4. 验证线上 ----------
 poll_live() {
     local deadline=$((SECONDS + POLL_SECS)) ok_home=0 ok_todos=0
     while [ "$SECONDS" -lt "$deadline" ]; do
         curl -fsS --max-time 2 -o /dev/null "${LIVE_URL}/" 2>/dev/null && ok_home=1 || ok_home=0
         curl -fsS --max-time 2 -o /dev/null "${LIVE_URL}/todos" 2>/dev/null && ok_todos=1 || ok_todos=0
         if [ "$ok_home" = 1 ] && [ "$ok_todos" = 1 ]; then
-            return 0
+            [ -z "${NEW_VERSION:-}" ] && return 0
+            curl -fsS --max-time 2 "${LIVE_URL}/version" 2>/dev/null | grep -q "\"${NEW_VERSION}\"" && return 0
         fi
         sleep 0.5
     done
@@ -143,15 +231,20 @@ main() {
 
     SECONDS=0
     TEST_COUNT=0
+    if [ "$restart" = 1 ]; then preflight; fi
     run_tests
 
     if [ "$restart" = 1 ]; then
-        restart_live
-        echo "==> 验证线上（${POLL_SECS}s 内轮询 / 与 /todos）"
-        poll_live || fail "重启后 ${POLL_SECS}s 内线上 ${LIVE_URL} 的首页或 /todos 不通"
-        echo "  线上首页与 /todos 均 200"
+        publish
+        install_local
+        echo "==> 验证线上（${POLL_SECS}s 内：首页、/todos、/version = ${NEW_VERSION}）"
+        if ! poll_live; then
+            rollback_local
+            fail "v${NEW_VERSION} 装上后 ${POLL_SECS}s 内线上不通或版本不对，已退回旧版 App（GitHub Release 保留，需修复后发下一版）"
+        fi
+        echo "  线上已是 v${NEW_VERSION}，首页与 /todos 正常"
     else
-        echo "==> --no-restart：跳过重启与线上验证"
+        echo "==> --no-restart：只跑测试，不发版、不碰线上"
     fi
 
     echo "✓ ${TEST_COUNT} 项全过 · 耗时 ${SECONDS}s"

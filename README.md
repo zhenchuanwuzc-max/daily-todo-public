@@ -45,12 +45,13 @@ callers cannot accidentally turn a one-time task into a recurring template.
 ## 上线：scripts/release.sh
 
 ```bash
-scripts/release.sh               # 跑全部测试 → 通过后重启线上服务 → 10 秒内轮询首页与 /todos
-scripts/release.sh --no-restart  # 只跑测试，不碰线上
+scripts/release.sh               # 测试 → 打版本标签 → GitHub 打包发布 → 装到本机 → 验证 → 不过退回旧版
+scripts/release.sh --no-restart  # 只跑测试，不发版、不碰线上
 ```
 
-- 测试 = `python -m unittest discover -s tests`（含 `tests/test_smoke.py` 主流程冒烟：临时数据目录 + 临时 HOME + 随机端口起真实 `server.py`，不碰真实数据、不触发 git 同步）。任一失败即 exit 非 0，且**不重启**。
-- 重启 = 退出并重新 `open -a ~/Applications/每日待办.app`（与 launchd `com.ocean.daily-todo` 每天 09:00 的启动命令一致）。重启后线上不通会弹 macOS 通知并 exit 非 0。
-- 注意：线上 App 里带的是打包时的 `server.py` / `index.html` 副本，重启不会把仓库里的新代码装进去；要让新代码生效需重新打包（`setup-on-this-mac.sh`）或走 GitHub release 的 App 内更新。
+- 测试 = `python -m unittest discover -s tests`（含 `tests/test_smoke.py` 主流程冒烟：临时数据目录 + 临时 HOME + 随机端口起真实 `server.py`，不碰真实数据、不触发 git 同步）。任一失败即 exit 非 0，不发版。
+- 发版前要求：在 main、工作区干净、不落后公开仓库。版本号自动取 VERSION 与已有标签中最大的补丁号 +1。
+- 打包只走 `.github/workflows/release.yml`（CI 再跑一遍测试并校验版本/双架构/签名）；其他电脑用 App 内「立即更新」拿同一个包。
+- 本机安装前把旧 App 备份到 `.release-backup/`；装好后 15 秒内首页、`/todos`、`/version` 任一不对就退回旧版并弹通知。
 - `tests/browser_reorder.py` 需要 playwright + 浏览器且不是 unittest 用例，未纳入 release 门禁。
 - 测试实例用 env `TODO_PORT` 换端口（不设置则仍是 8766）。

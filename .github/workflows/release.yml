@@ -50,7 +50,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: daily-todo-*-macos-universal.zip
-          body: |
-            修复“立即更新”因 GitHub 匿名 API 限流而返回 HTTP 403 的问题。
-            公开版本改用 Release 页面获取版本和安装包，并在安装前校验 SHA-256。
-            本版从源码重新打包，确保 App 实际运行的内嵌 Python 模块也包含修复。
+          generate_release_notes: true
