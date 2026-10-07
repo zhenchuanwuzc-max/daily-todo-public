@@ -983,10 +983,22 @@ class Handler(BaseHTTPRequestHandler):
         return
 
 
+class _LocalHTTPServer(ThreadingHTTPServer):
+    """跳过 HTTPServer.server_bind 里的 socket.getfqdn 反向域名查询：
+    只监听 127.0.0.1 用不上主机全名，而在部分机器（如 GitHub macOS 构建机）上这一步会卡十几秒。"""
+
+    def server_bind(self):
+        import socketserver
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = host
+        self.server_port = port
+
+
 def serve_forever():
     """供 desktop_app 在线程中调用"""
     try:
-        srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+        srv = _LocalHTTPServer(("127.0.0.1", PORT), Handler)
     except OSError as e:
         if e.errno in (48, 98):
             print(f"daily-todo already running on {PORT}, skip.")
