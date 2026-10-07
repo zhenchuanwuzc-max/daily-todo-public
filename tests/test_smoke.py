@@ -71,6 +71,7 @@ class SmokeTest(unittest.TestCase):
             "TODO_PORT": str(self.port),
             "HOME": self.home,
             "PYTHONUNBUFFERED": "1",
+            "PYTHONFAULTHANDLER": "1",  # 卡住时 SIGABRT 能打印调用栈
         })
         env.pop("PYTHONPATH", None)
         self._log = open(self.log_path, "wb")
@@ -89,6 +90,13 @@ class SmokeTest(unittest.TestCase):
             except Exception:
                 time.sleep(0.1)
         else:
+            if self.proc.poll() is None:  # 还活着却没就绪：打出它卡在哪
+                import signal
+                self.proc.send_signal(signal.SIGABRT)
+                try:
+                    self.proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    pass
             self.fail(f"server {STARTUP_TIMEOUT}s 内未就绪\n{self.read_log()}")
         # 隔离自检：必须确认读写的是临时目录，不是真实数据仓
         log = self.read_log()
