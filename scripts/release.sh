@@ -4,6 +4,7 @@
 #
 #   scripts/release.sh               完整上线（会推送到公开仓库 + 发 GitHub Release + 替换本机 App）
 #   scripts/release.sh --no-restart  只跑测试，不发版、不碰线上
+#   scripts/release.sh --install [版本] 只把已发布的版本（默认最新）装到本机，其他电脑也用这个
 #
 # 线上 = ~/Applications/每日待办.app（py2app 桌面壳，App 内线程跑 server.py，127.0.0.1:8766）。
 # App 里带的是打包时的代码副本，所以「上线」必须重新打包；打包统一走 .github/workflows/release.yml
@@ -15,7 +16,7 @@
 #   DAILY_TODO_LIVE_PORT  线上端口（默认 8766）
 #   DAILY_TODO_POLL_SECS  重启后轮询秒数（默认 15）
 #   DAILY_TODO_CI_MINUTES 等 GitHub 打包的上限分钟数（默认 20）
-set -euo pipefail
+set -Eeuo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP="${HOME}/Applications/每日待办.app"
@@ -31,8 +32,18 @@ notify() {
     osascript -e "display notification \"$1\" with title \"daily-todo release\"" >/dev/null 2>&1 || true
 }
 
+on_unexpected_exit() {
+    local rc=$? line="$1"
+    trap - ERR
+    echo "✗ 脚本在第 ${line} 行意外退出（rc=${rc}）" >&2
+    [ "${INSTALLING:-0}" = 1 ] && rollback_local || true
+    notify "上线脚本第 ${line} 行意外退出，$([ "${INSTALLING:-0}" = 1 ] && echo 已退回旧版 || echo 本机 App 未改动)"
+    exit "$rc"
+}
+
 fail() {
     echo "✗ $1" >&2
+    if [ "${INSTALLING:-0}" = 1 ]; then INSTALLING=0; rollback_local || true; fi
     notify "$1"
     exit 1
 }
@@ -80,6 +91,8 @@ stop_live() {
     local pid cmd
     # 端口上的监听者必须看起来是 daily-todo，才允许杀（避免误杀别的服务）
     for pid in $(listener_pids); do
+        # ps 会把中文路径转义，按「是不是待办 App 进程」判断，不靠匹配中文名
+        if app_pids | grep -qx "$pid"; then continue; fi
         cmd="$(ps -o command= -p "$pid" 2>/dev/null || true)"
         case "$cmd" in
             *每日待办*|*daily-todo*|*server.py*|*desktop_app.py*) ;;
@@ -161,13 +174,14 @@ publish() {
     echo "  ${tag} 已发布"
 }
 
-timeout_run() {  # $1=秒，其余为命令；macOS 没有 timeout，用后台进程兜底
+timeout_run() {  # $1=秒，其余为命令；macOS 没有 timeout，用后台计时兜底
     local secs="$1"; shift
     "$@" & local pid=$!
-    ( sleep "$secs" && kill "$pid" 2>/dev/null ) & local watcher=$!
+    sleep "$secs" </dev/null >/dev/null 2>&1 & local sleeper=$!
+    ( wait "$sleeper" 2>/dev/null; kill "$pid" 2>/dev/null ) </dev/null >/dev/null 2>&1 &
     local rc=0
     wait "$pid" || rc=$?
-    kill "$watcher" 2>/dev/null || true
+    kill "$sleeper" 2>/dev/null || true
     return "$rc"
 }
 
@@ -178,10 +192,11 @@ install_local() {
     echo "==> 下载并安装 ${tag}"
     gh release download "$tag" -R "$GITHUB_REPO" -p '*.zip' -D "$work" >/dev/null || fail "下载 ${tag} 安装包失败；本机 App 未改动"
     ditto -x -k "$work"/*.zip "$work/extracted" || fail "解压安装包失败；本机 App 未改动"
-    NEW_APP_PATH="$(find "$work/extracted" -maxdepth 2 -name '*.app' -type d | head -1)"
+    NEW_APP_PATH="$(find "$work/extracted" -maxdepth 2 -name '*.app' -type d -print -quit)"
     [ -n "$NEW_APP_PATH" ] || fail "安装包里没有 .app；本机 App 未改动"
     xattr -dr com.apple.quarantine "$NEW_APP_PATH" 2>/dev/null || true
 
+    INSTALLING=1
     stop_live
     rm -rf "$BACKUP_DIR"; mkdir -p "$BACKUP_DIR"
     if [ -d "$APP" ]; then
@@ -221,17 +236,29 @@ poll_live() {
 }
 
 main() {
-    local restart=1 arg
+    local restart=1 arg mode=release
+    trap 'on_unexpected_exit $LINENO' ERR
     for arg in "$@"; do
         case "$arg" in
             --no-restart) restart=0 ;;
+            --install) mode=install ;;
+            v[0-9]*|[0-9]*) NEW_VERSION="${arg#v}" ;;
             -h|--help) sed -n '2,10p' "${BASH_SOURCE[0]}"; exit 0 ;;
-            *) echo "未知参数：$arg（支持 --no-restart）" >&2; exit 2 ;;
+            *) echo "未知参数：$arg（支持 --no-restart / --install [版本]）" >&2; exit 2 ;;
         esac
     done
 
     SECONDS=0
     TEST_COUNT=0
+    if [ "$mode" = install ]; then  # 只安装已发布的版本（默认最新），不跑测试、不发版
+        [ -n "${NEW_VERSION:-}" ] || NEW_VERSION="$(gh release view -R "$GITHUB_REPO" --json tagName -q .tagName | sed 's/^v//')"
+        [ -n "$NEW_VERSION" ] || fail "查不到已发布的版本"
+        install_local
+        poll_live || fail "v${NEW_VERSION} 装上后 ${POLL_SECS}s 内线上不通或版本不对"
+        INSTALLING=0
+        echo "✓ 本机已装 v${NEW_VERSION}，首页与 /todos 正常 · 耗时 ${SECONDS}s"
+        return 0
+    fi
     if [ "$restart" = 1 ]; then preflight; fi
     run_tests
 
@@ -240,9 +267,9 @@ main() {
         install_local
         echo "==> 验证线上（${POLL_SECS}s 内：首页、/todos、/version = ${NEW_VERSION}）"
         if ! poll_live; then
-            rollback_local
             fail "v${NEW_VERSION} 装上后 ${POLL_SECS}s 内线上不通或版本不对，已退回旧版 App（GitHub Release 保留，需修复后发下一版）"
         fi
+        INSTALLING=0
         echo "  线上已是 v${NEW_VERSION}，首页与 /todos 正常"
     else
         echo "==> --no-restart：只跑测试，不发版、不碰线上"

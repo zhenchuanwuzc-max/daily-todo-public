@@ -47,6 +47,7 @@ callers cannot accidentally turn a one-time task into a recurring template.
 ```bash
 scripts/release.sh               # 测试 → 打版本标签 → GitHub 打包发布 → 装到本机 → 验证 → 不过退回旧版
 scripts/release.sh --no-restart  # 只跑测试，不发版、不碰线上
+scripts/release.sh --install     # 只把最新已发布版本装到本机（其他电脑用这个）
 ```
 
 - 测试 = `python -m unittest discover -s tests`（含 `tests/test_smoke.py` 主流程冒烟：临时数据目录 + 临时 HOME + 随机端口起真实 `server.py`，不碰真实数据、不触发 git 同步）。任一失败即 exit 非 0，不发版。
