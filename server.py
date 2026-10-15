@@ -574,27 +574,60 @@ def reorder_tasks(item):
             or any(not isinstance(i, str) or not i for i in ids)
             or len(set(ids)) != len(ids)):
         raise ValueError("ids must contain at least two unique task IDs")
+    scope = item.get("scope")
+    if scope not in (None, "project"):
+        raise ValueError("unknown task ordering scope")
     with _write_lock:
         data = read_data()
         by_id = {t["id"]: t for t in data.get("tasks", [])}
         selected = [by_id.get(i) for i in ids]
-        for task in selected:
-            if (task is None or task.get("deleted_at") or task.get("done")
-                    or task.get("source") == "claude-suggest"
-                    or (task.get("recurring") in ("daily", "weekly", "monthly")
-                        and not task.get("recur_source"))):
-                raise ValueError("列表已变化，请刷新后重新排序")
-        def group(task):
-            priority = task.get("priority")
-            # Legacy P3 is displayed with P2; keep its stored value untouched.
-            if priority == "P3":
-                return "P2"
-            return priority if priority in ("P0", "P1", "P2") else "PN"
-        if len({group(t) for t in selected}) != 1:
-            raise ValueError("请在同一优先级内排序")
+        if scope == "project":
+            project_id = item.get("project_id")
+            milestone_id = item.get("milestone_id") or None
+            if (not isinstance(project_id, str) or not project_id
+                    or item.get("milestone_id") not in (None, "")
+                    and not isinstance(item.get("milestone_id"), str)):
+                raise ValueError("project_id and milestone_id must be IDs")
+            try:
+                entity_by_id(data, "projects", project_id)
+                if milestone_id:
+                    milestone = entity_by_id(data, "milestones", milestone_id)
+                    if milestone.get("project_id") != project_id:
+                        raise ValueError("请在同一里程碑内排序")
+            except KeyError:
+                raise ValueError("项目或里程碑已变化，请刷新后重新排序") from None
+            milestones = {m["id"]: m for m in data.get("milestones", [])}
+            for task in selected:
+                if (task is None or task.get("deleted_at") or task.get("recurring")
+                        or task.get("recur_source") or task.get("auto_skipped")
+                        or task.get("source") == "claude-suggest"):
+                    raise ValueError("列表已变化，请刷新后重新排序")
+                linked = milestones.get(task.get("milestone_id"))
+                effective_milestone = (linked["id"] if linked and not linked.get("deleted_at")
+                                       and linked.get("project_id") == project_id else None)
+                if task.get("project_id") != project_id or effective_milestone != milestone_id:
+                    raise ValueError("请在同一项目的同一里程碑内排序")
+            order_field = "project_sort_order"
+        else:
+            for task in selected:
+                if (task is None or task.get("deleted_at") or task.get("done")
+                        or task.get("source") == "claude-suggest"
+                        or (task.get("recurring") in ("daily", "weekly", "monthly")
+                            and not task.get("recur_source"))):
+                    raise ValueError("列表已变化，请刷新后重新排序")
+            def group(task):
+                priority = task.get("priority")
+                # Legacy P3 is displayed with P2; keep its stored value untouched.
+                if priority == "P3":
+                    return "P2"
+                return priority if priority in ("P0", "P1", "P2") else "PN"
+            if len({group(t) for t in selected}) != 1:
+                raise ValueError("请在同一优先级内排序")
+            order_field = "sort_order"
+        stamp = timestamp()
         for position, task in enumerate(selected):
-            task["sort_order"] = position
-            stamp_fields(task, ["sort_order"])
+            task[order_field] = position
+            stamp_fields(task, [order_field], stamp)
         _atomic_write_todos(data)
     schedule_sync()
     return {"ok": True, "updated": data["updated"], "revision": data["revision"]}

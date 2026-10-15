@@ -107,6 +107,21 @@ class ProjectSyncTest(unittest.TestCase):
         self.assertFalse(self.read(self.local)["tasks"][0]["done"])
         self.assertIsNone(self.read(self.local)["tasks"][0]["done_at"])
 
+    def test_project_task_order_survives_sync_without_changing_thing_order(self):
+        local, other = copy.deepcopy(self.data), copy.deepcopy(self.data)
+        local["tasks"][0] = edited(local["tasks"][0], LATER, project_sort_order=2)
+        other["tasks"][0] = edited(other["tasks"][0], LATEST, sort_order=7, text="Remote content")
+        other["tasks"].append({"id": "new-task", "text": "Concurrent addition", "project_id": "p1"})
+        self.write(self.local, local)
+        self.publish_other(other)
+        self.sync()
+        tasks = {task["id"]: task for task in self.read(self.local)["tasks"]}
+        self.assertEqual((tasks["t1"]["project_sort_order"], tasks["t1"]["sort_order"], tasks["t1"]["text"]),
+                         (2, 7, "Remote content"))
+        self.assertEqual(tasks["t1"]["_field_updated"]["project_sort_order"], LATER)
+        self.assertIn("new-task", tasks)
+        self.assertTrue(self.status().startswith("ok:"))
+
     def test_bad_local_data_is_not_committed(self):
         before = self.git(self.local, "rev-parse", "HEAD")
         (self.local / "todos.json").write_text("broken")

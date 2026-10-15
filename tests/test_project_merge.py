@@ -41,6 +41,19 @@ class ProjectMergeTest(unittest.TestCase):
         self.assertEqual((result["owner"], result["text"], result["deadline"]), ("Lin", "Other text", "2026-10-20"))
         self.assertEqual(result["_field_updated"]["owner"], LATER)
 
+    def test_project_task_order_is_independent_from_thing_order_and_content(self):
+        old = {**self.base["tasks"][0], "sort_order": 4, "project_sort_order": 3}
+        ours = edited(old, LATER, project_sort_order=0)
+        theirs = edited(old, LATEST, sort_order=2, text="Latest content")
+        for first, second in ((ours, theirs), (theirs, ours)):
+            result = self.task_merge(first, second, old)
+            self.assertEqual((result["project_sort_order"], result["sort_order"], result["text"]),
+                             (0, 2, "Latest content"))
+            self.assertEqual(result["_field_updated"]["project_sort_order"], LATER)
+        newer = edited(old, LATEST, project_sort_order=3)
+        result = self.task_merge(newer, ours, old)
+        self.assertEqual(result["project_sort_order"], 3)
+
     def test_undo_against_stale_completed_record(self):
         old = edited(self.base["tasks"][0], EARLY, done=True, done_at=EARLY)
         result = self.task_merge(edited(old, LATER, done=False, done_at=None), edited(old, LATEST, text="Edited later"), old)

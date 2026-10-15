@@ -57,17 +57,16 @@ def main():
                 page.evaluate("document.activeElement?.blur()")
                 page.wait_for_function("mutationCount === 0 && !renderPending")
 
-            def ensure_project_edit():
-                toggle = page.locator("#projectEditToggle")
-                if toggle.inner_text().strip() == "编辑":
+            def ensure_project_add():
+                toggle = page.locator("#projectAddToggle")
+                if toggle.inner_text().strip() == "新增事项":
                     toggle.click()
                     settle()
-                assert toggle.inner_text().strip() == "完成编辑"
+                assert toggle.inner_text().strip() == "收起新增"
 
-            def assert_project_view():
-                assert page.locator("#projectEditToggle").inner_text().strip() == "编辑"
+            def assert_project_add_hidden():
+                assert page.locator("#projectAddToggle").inner_text().strip() == "新增事项"
                 assert page.locator("#projectDetail .milestone-add").count() == 0
-                assert page.locator("#projectDetail .inline-task input:not([type=checkbox]), #projectDetail .inline-task select, #projectDetail .inline-task [contenteditable=true], #projectDetail .inline-task .row-delete").count() == 0
 
             def assert_compact_sticky_heading():
                 title = page.locator("#projectDetail .project-heading h2")
@@ -93,6 +92,9 @@ def main():
 
             def menu_action(wrapper, name):
                 """Open the compact settings menu before using an existing action."""
+                if wrapper == ".project-actions" and name == "编辑":
+                    page.locator("#projectDetail .project-heading h2[role=button]").click()
+                    return
                 root = page.locator(wrapper)
                 menu = root.locator("details.action-menu")
                 if not menu.evaluate("node => node.open"):
@@ -177,8 +179,9 @@ def main():
             assert page.locator(".project-progress").count() == 0, "An empty project must not show an empty progress card"
             assert page.locator("#coreSummary").is_hidden(), "Project tab must not repeat the core summary"
             assert page.locator('.milestone:not([data-milestone-id])').count() == 1
-            assert_project_view()
-            ensure_project_edit()
+            assert_project_add_hidden()
+            assert not set(page.locator(".project-actions .action-menu-list button").all_text_contents()) & {"编辑", "归档"}
+            ensure_project_add()
             assert_menu_dismissal(".project-actions")
             page.locator("#thingsTab").click()
             assert page.locator("#coreSummary").is_visible()
@@ -226,7 +229,7 @@ def main():
             first_form.locator('[name=owner]').fill("Ocean")
 
             def add_in_milestone(mid, text, owner="Ocean", deadline=today):
-                ensure_project_edit()
+                ensure_project_add()
                 form = page.locator(f'form.milestone-add[data-milestone-id="{mid}"]')
                 assert form.locator('[name=owner]').input_value() == "Ocean"
                 assert form.locator('[name=owner]').get_attribute("list") is None
@@ -266,10 +269,10 @@ def main():
             first_form.locator('[name=text]').fill("尚未保存的新增草稿")
             first_form.locator('[name=owner]').fill("手写草稿负责人")
             first_form.locator('[name=deadline]').fill("2099-12-20")
-            page.locator("#projectEditToggle").click()
+            page.locator("#projectAddToggle").click()
             settle()
-            assert_project_view()
-            ensure_project_edit()
+            assert_project_add_hidden()
+            ensure_project_add()
             assert first_form.locator('[name=text]').input_value() == "尚未保存的新增草稿"
             assert first_form.locator('[name=owner]').input_value() == "手写草稿负责人"
             assert first_form.locator('[name=deadline]').input_value() == "2099-12-20"
@@ -286,9 +289,18 @@ def main():
             # Reload deliberately discards this unsaved test draft and uses the new milestone default.
             page.reload()
             page.locator("#projectDetail .project-heading").wait_for()
-            assert_project_view()
+            assert_project_add_hidden()
+            default_row = page.locator(f'#projectDetail [data-id="{first_task["id"]}"]')
+            assert default_row.locator('.text[contenteditable=true]').count() == 1
+            assert default_row.locator('[data-field=owner]').is_enabled()
+            assert default_row.locator('[data-field=deadline]').is_enabled()
+            assert default_row.locator('.pri-select').is_enabled()
             page.locator(f'section[data-milestone-id="{first}"] .milestone-title').click()
-            assert page.locator("#entityDialog").is_hidden(), "A view-mode milestone title must not enter editing"
+            page.locator("#entityDialog").wait_for(state="visible")
+            assert page.locator("#entityTitle").inner_text() == "编辑里程碑"
+            assert page.locator("#projectAddToggle").inner_text().strip() == "新增事项", "Editing milestone metadata must keep the add-form toggle unchanged"
+            page.locator("#entityCancel").click()
+            settle()
             view_checkbox = page.locator(f'#projectDetail [data-id="{first_task["id"]}"] input[type=checkbox]')
             view_checkbox.check()
             settle()
@@ -299,8 +311,8 @@ def main():
             settle()
             page.locator("#showCompletedProjectItems").uncheck()
             assert task_named(first_task["text"])["done"] is False
-            assert_project_view()
-            ensure_project_edit()
+            assert_project_add_hidden()
+            ensure_project_add()
             assert first_form.locator('[name=deadline]').input_value() == "2099-12-22"
             assert second_form.locator('[name=deadline]').input_value() == ""
 
@@ -498,7 +510,10 @@ def main():
             assert "体验优化项目已修改" in page.locator('.project-item[aria-current="true"] strong').inner_text()
             assert_compact_sticky_heading()
             assert page.locator("#projectSearch").count() == 0
-            menu_action(".project-actions", "归档")
+            # Older archived records remain recoverable even though manual archive left the menu.
+            response = context.request.patch(url + "/projects/" + project_id, data={"archived": True})
+            assert response.ok, response.text()
+            page.evaluate("readState(true)")
             settle()
             assert server.read_data()["projects"][0]["archived"] is True
             assert page.locator(".project-item").count() == 0, "Archived projects must leave the active list"
@@ -608,15 +623,15 @@ def main():
                     if width in (775, 1013, 1305):
                         page.screenshot(path=str(output / f"milestone-entry-{tab}-{engine}-{width}.png"), full_page=True)
                         if tab == "projects":
-                            page.locator("#projectEditToggle").click()
+                            page.locator("#projectAddToggle").click()
                             settle()
-                            assert_project_view()
+                            assert_project_add_hidden()
                             page.screenshot(path=str(output / f"milestone-view-projects-{engine}-{width}.png"), full_page=True)
-                            ensure_project_edit()
+                            ensure_project_add()
             page.set_viewport_size({"width": 1100, "height": 850})
             page.reload()
             page.locator("#projectDetail .project-heading").wait_for()
-            assert_project_view()
+            assert_project_add_hidden()
             assert page.locator("#showCompletedProjectItems").is_checked(), "Show-completed choice must survive refresh"
             assert page.locator(".milestone-toggle").count() == 0
             assert "体验优化项目已修改" in page.locator('.project-item[aria-current="true"] strong').inner_text()
@@ -677,7 +692,7 @@ def main():
             assert page.locator('#groups [data-id="midnight-done"]').count() == 0
             assert page.locator('#groups [data-id="midnight-due"] .date-status').inner_text() == "逾期"
             assert not errors, errors
-            print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/sidebar creation, dedicated milestone-order dialog/boundaries/hidden completed records/pending+failure retry, milestone title editing/show-completed filtering+preference/no toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, default project view/check-uncheck/edit-mode draft preservation, milestone default deadline/manual override/draft preservation/no retroactive changes, shared owner picker plus free input/no project association control, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore through Things tab, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 775/920/1013/1100/1305px layout, persistence; no JS errors")
+            print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/sidebar creation, dedicated milestone-order dialog/boundaries/hidden completed records/pending+failure retry, milestone title editing/show-completed filtering+preference/no toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, default inline editing/check-uncheck/add-form draft preservation, milestone default deadline/manual override/draft preservation/no retroactive changes, shared owner picker plus free input/no project association control, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore through Things tab, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 775/920/1013/1100/1305px layout, persistence; no JS errors")
             browser.close()
         httpd.shutdown()
 

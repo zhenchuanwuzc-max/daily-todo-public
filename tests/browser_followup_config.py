@@ -50,6 +50,9 @@ def main():
                     page.wait_for_function("mutationCount === 0 && !renderPending")
 
                 def menu_action(name):
+                    if name == "编辑":
+                        page.locator("#projectDetail .project-heading h2[role=button]").click()
+                        return
                     selector = "#globalSettings" if name in ("人员维护", "周报接收群") else ".project-actions details.action-menu"
                     menu = page.locator(selector)
                     if not menu.evaluate("node => node.open"):
@@ -73,6 +76,122 @@ def main():
                 assert page.locator("#globalSettings > summary").inner_text() == "设置"
                 project_actions = page.locator(".project-actions .action-menu-list button").all_text_contents()
                 assert "人员维护" not in project_actions and "人员工号" not in project_actions and "周报接收群" not in project_actions
+                assert "编辑" not in project_actions and "归档" not in project_actions
+
+                def project_card(value):
+                    return page.locator(f'#projectList .project-item[data-project-id="{value["id"]}"]')
+
+                context_menu = page.locator("#projectContextMenu")
+                entity = page.locator("#entityDialog")
+
+                def open_context(value):
+                    project_card(value).click(button="right")
+                    context_menu.wait_for(state="visible")
+                    assert entity.is_hidden(), "Right-click must open the project menu before the editor"
+                    assert context_menu.get_by_role("menuitem").all_text_contents() == ["编辑", "删除"]
+
+                def assert_project_editor(value):
+                    entity.wait_for(state="visible")
+                    assert page.locator("#entityTitle").inner_text() == "编辑项目"
+                    assert entity.locator('[name="name"]').input_value() == value["name"]
+                    assert entity.locator('[name="owner"]').input_value() == value["owner"]
+
+                def cancel_entity():
+                    page.locator("#entityCancel").click()
+                    entity.wait_for(state="hidden")
+                    settle()
+
+                # Context-menu targets do not depend on which project is currently selected.
+                snapshot = Path(server.DATA_FILE).read_bytes()
+                for target in (project, other):
+                    open_context(target)
+                    assert project_card(project).get_attribute("aria-current") == "true"
+                    context_menu.get_by_role("menuitem", name="编辑", exact=True).click()
+                    assert_project_editor(target)
+                    assert page.locator("#projectAddToggle").get_attribute("aria-pressed") == "false"
+                    cancel_entity()
+                    assert Path(server.DATA_FILE).read_bytes() == snapshot
+
+                # Project and milestone titles edit metadata without opening the large add forms.
+                page.locator("#projectDetail .project-heading h2[role=button]").click()
+                assert_project_editor(project)
+                cancel_entity()
+                page.locator("#projectDetail .milestone-title").first.click()
+                assert page.locator("#entityTitle").inner_text() == "编辑里程碑"
+                assert entity.locator('[name="name"]').input_value() == "测试节点"
+                cancel_entity()
+                assert page.locator("#projectAddToggle").get_attribute("aria-pressed") == "false"
+                assert Path(server.DATA_FILE).read_bytes() == snapshot
+
+                # Keyboard, outside click, scrolling, and viewport edges all close/place the menu.
+                project_card(other).focus()
+                page.keyboard.press("Shift+F10")
+                context_menu.wait_for(state="visible")
+                assert entity.is_hidden()
+                page.keyboard.press("ArrowDown")
+                assert context_menu.get_by_role("menuitem", name="删除", exact=True).evaluate("node => document.activeElement === node")
+                page.keyboard.press("ArrowUp")
+                assert context_menu.get_by_role("menuitem", name="编辑", exact=True).evaluate("node => document.activeElement === node")
+                page.keyboard.press("Escape")
+                context_menu.wait_for(state="hidden")
+                open_context(other)
+                page.mouse.click(4, 4)
+                context_menu.wait_for(state="hidden")
+                for width in (775, 1013):
+                    page.set_viewport_size({"width": width, "height": 774})
+                    # Resize intentionally dismisses menus; finish that event before opening at the edge.
+                    page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
+                    project_card(other).dispatch_event("contextmenu", {"button": 2, "clientX": width - 2, "clientY": 772})
+                    context_menu.wait_for(state="visible")
+                    bounds = context_menu.bounding_box()
+                    assert bounds["x"] >= 0 and bounds["y"] >= 0
+                    assert bounds["x"] + bounds["width"] <= width and bounds["y"] + bounds["height"] <= 774, bounds
+                    page.keyboard.press("Escape")
+                page.evaluate("() => { const spacer=document.createElement('div'); spacer.id='context-scroll-test'; spacer.style.height='1500px'; document.body.append(spacer); }")
+                open_context(other)
+                page.evaluate("window.scrollTo(0, 120)")
+                context_menu.wait_for(state="hidden")
+                page.evaluate("() => { document.getElementById('context-scroll-test').remove(); window.scrollTo(0,0); }")
+
+                # Editing another project's metadata must not discard the current add-form draft.
+                page.locator("#projectAddToggle").click()
+                add_form = page.locator("#projectDetail .milestone-add").first
+                add_form.locator('[name="text"]').fill("保留的新增事项草稿")
+                add_form.locator('[name="owner"]').fill("草稿负责人")
+                add_form.locator('[name="deadline"]').fill("2099-12-30")
+                open_context(other)
+                context_menu.get_by_role("menuitem", name="编辑", exact=True).click()
+                assert_project_editor(other)
+                entity.locator('[name="name"]').fill("取消的项目名称草稿")
+                cancel_entity()
+                assert page.locator("#projectAddToggle").get_attribute("aria-pressed") == "true"
+                assert add_form.locator('[name="text"]').input_value() == "保留的新增事项草稿"
+                assert add_form.locator('[name="owner"]').input_value() == "草稿负责人"
+                assert add_form.locator('[name="deadline"]').input_value() == "2099-12-30"
+                assert Path(server.DATA_FILE).read_bytes() == snapshot
+                page.locator("#projectAddToggle").click()
+                settle()
+
+                # Menu deletion can be cancelled; accepted deletion remains recoverable.
+                page.once("dialog", lambda dialog: dialog.dismiss())
+                open_context(other)
+                context_menu.get_by_role("menuitem", name="删除", exact=True).click()
+                settle()
+                assert Path(server.DATA_FILE).read_bytes() == snapshot
+                page.once("dialog", lambda dialog: dialog.accept())
+                open_context(other)
+                context_menu.get_by_role("menuitem", name="删除", exact=True).click()
+                settle()
+                assert next(value for value in server.read_data()["projects"] if value["id"] == other["id"])["deleted_at"]
+                assert project_card(other).count() == 0
+                assert server.read_data()["tasks"] == original_tasks
+                menu_action("恢复项目")
+                page.locator(f'#projectRestoreList [data-project-id="{other["id"]}"]').get_by_role("button", name="恢复到进行中", exact=True).click()
+                page.locator("#projectRestoreDialog").wait_for(state="hidden")
+                settle()
+                assert not next(value for value in server.read_data()["projects"] if value["id"] == other["id"])["deleted_at"]
+                assert project_card(other).count() == 1
+                project_card(project).click()
 
                 # Project routing is per project; cancel and clear are both supported.
                 menu_action("编辑")
