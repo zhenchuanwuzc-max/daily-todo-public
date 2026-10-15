@@ -158,6 +158,8 @@ def main():
             save_entity("体验优化项目", "项目负责人", core=True)
             project_id = server.read_data()["projects"][0]["id"]
             assert_compact_sticky_heading()
+            assert not page.locator("#showCompletedProjectItems").is_checked()
+            assert page.locator(".milestone-toggle").count() == 0
             assert page.locator(".project-progress").count() == 0, "An empty project must not show an empty progress card"
             assert page.locator("#coreSummary").is_hidden(), "Project tab must not repeat the core summary"
             assert page.locator('.milestone:not([data-milestone-id])').count() == 1
@@ -216,21 +218,34 @@ def main():
             settle()
             row.locator('input[type=checkbox]').check()
             settle()
+            # A completed record from an earlier day still contributes to milestone progress.
+            historical_fixture = server.read_data()
+            next(t for t in historical_fixture["tasks"] if t["id"] == first_task["id"])["done_at"] = "2026-01-02T10:00:00"
+            server.write_data(historical_fixture)  # This server uses only the disposable temporary store.
+            page.evaluate("readState(true)")
             page.locator("#projectsTab").click()
+            assert not page.locator("#showCompletedProjectItems").is_checked()
             assert "1/2 完成" in page.locator(f'section[data-milestone-id="{first}"]').inner_text()
-            assert page.locator(f'#projectDetail [data-id="{first_task["id"]}"] [data-field=owner]').input_value() == "李四"
+            assert page.locator(f'#projectDetail [data-id="{first_task["id"]}"]').count() == 0, "Completed rows hide without changing the historical denominator"
             page.locator(f'#projectDetail [data-id="{second_task["id"]}"] input[type=checkbox]').check()
             settle()
-            assert "2/2 完成" in page.locator(f'section[data-milestone-id="{first}"]').inner_text()
+            assert page.locator(f'section[data-milestone-id="{first}"]').count() == 0, "Fully completed milestones hide by default"
             assert "当前：上线验收" in page.locator(".project-progress").inner_text()
+            page.locator("#showCompletedProjectItems").check()
             section = page.locator(f'section[data-milestone-id="{first}"]')
-            assert section.locator(".milestone-toggle").get_attribute("aria-expanded") == "false"
-            section.locator(".milestone-toggle").click()
-            assert section.locator(".milestone-toggle").get_attribute("aria-expanded") == "true"
-            assert not page.locator("#entityDialog").is_visible(), "Expand toggle must not open editing"
+            assert "2/2 完成" in section.inner_text()
+            assert section.locator(f'[data-id="{first_task["id"]}"] [data-field=owner]').input_value() == "李四"
+            assert page.locator(".milestone-toggle").count() == 0
             section.locator(f'[data-id="{first_task["id"]}"] input[type=checkbox]').uncheck()
             settle()
+            page.locator("#showCompletedProjectItems").uncheck()
+            assert section.count() == 1, "Reopened milestone remains visible with completed rows hidden"
+            assert section.locator(f'[data-id="{first_task["id"]}"]').count() == 1
+            assert section.locator(f'[data-id="{second_task["id"]}"]').count() == 0
             assert "当前：方案确认" in page.locator(".project-progress").inner_text()
+            page.locator("#thingsTab").click()
+            assert not page.locator(f'#groups [data-id="{first_task["id"]}"] input[type=checkbox]').is_checked()
+            page.locator("#projectsTab").click()
             page.screenshot(path=str(output / f"projects-{engine}.png"), full_page=True)
             # Test actual sticky positioning with a temporary DOM spacer; no task data is changed.
             assert_compact_sticky_heading()
@@ -306,6 +321,7 @@ def main():
             assert page.locator(f'.milestone:not([data-milestone-id]) [data-id="{first_task["id"]}"]').count() == 1
             page.locator(f'#projectDetail [data-id="{first_task["id"]}"] .association').select_option(json.dumps([project_id, second], separators=(",", ":")))
             settle()
+            page.locator("#showCompletedProjectItems").check()
             deleted_milestone_association = page.locator(f'#projectDetail [data-id="{second_task["id"]}"] .association')
             assert deleted_milestone_association.input_value().startswith("retained:")
             deleted_milestone_association.select_option(json.dumps([project_id, None], separators=(",", ":")))
@@ -316,6 +332,10 @@ def main():
             assert task_named(first_task["text"])["milestone_id"] == second
             assert task_named(second_task["text"])["milestone_id"] is None
             assert task_named(retained_task["text"])["milestone_id"] == first
+            page.locator("#showCompletedProjectItems").uncheck()
+            assert page.locator('.milestone:not([data-milestone-id])').count() == 0, "A fully completed pending group also hides"
+            page.locator("#showCompletedProjectItems").check()
+            assert page.locator('.milestone:not([data-milestone-id])').count() == 1
 
             menu_action(".project-actions", "编辑")
             save_entity("体验优化项目已修改", "项目负责人已修改")
@@ -431,6 +451,8 @@ def main():
             page.set_viewport_size({"width": 1100, "height": 850})
             page.reload()
             page.locator("#projectDetail .project-heading").wait_for()
+            assert page.locator("#showCompletedProjectItems").is_checked(), "Show-completed choice must survive refresh"
+            assert page.locator(".milestone-toggle").count() == 0
             assert "体验优化项目已修改" in page.locator('.project-item[aria-current="true"] strong').inner_text()
             assert_compact_sticky_heading()
             assert page.locator(".project-owner, .milestone-actions, .milestone-section-heading").count() == 0
@@ -489,7 +511,7 @@ def main():
             assert page.locator('#groups [data-id="midnight-done"]').count() == 0
             assert page.locator('#groups [data-id="midnight-due"] .date-status').inner_text() == "逾期"
             assert not errors, errors
-            print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/sidebar creation, milestone title editing/separate toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 920/1013px layout, persistence; no JS errors")
+            print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/sidebar creation, milestone title editing/show-completed filtering+preference/no toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 920/1013px layout, persistence; no JS errors")
             browser.close()
         httpd.shutdown()
 

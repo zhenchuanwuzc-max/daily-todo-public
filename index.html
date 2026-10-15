@@ -766,7 +766,9 @@ body { min-width:900px; padding:16px 20px; }
 .project-heading > div:first-child { min-width:0; }
 .project-heading h2 { font-size:14px; font-weight:600; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .project-goal { color:var(--text-2); line-height:1.6; white-space:pre-wrap; margin:4px 0 12px; }
-.project-actions { display:flex; flex-shrink:0; gap:6px; white-space:nowrap; }
+.project-actions { display:flex; align-items:center; flex-shrink:0; gap:12px; white-space:nowrap; }
+.completed-visibility { display:flex; align-items:center; gap:6px; color:var(--text-2); font-size:12px; cursor:pointer; }
+.completed-visibility input { accent-color:var(--accent); }
 .project-actions button,.subtle-button,.dialog-actions button,.entity-milestone-actions button { border:1px solid var(--line); background:var(--surface); color:var(--text-2); font-family:inherit; border-radius:5px; padding:6px 9px; cursor:pointer; font-size:12px; }
 button.primary { background:var(--accent); border-color:var(--accent); color:white; }
 button.danger { color:#b42318; }
@@ -776,9 +778,9 @@ button:disabled { cursor:default; opacity:.5; }
 .milestone { margin-bottom:18px; }
 .milestone.empty { padding:0; }
 .milestone-head { display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line); padding:6px 0; }
-.milestone-toggle { flex-shrink:0; width:24px; min-height:28px; padding:0; border:0; border-radius:4px; background:none; color:var(--text-2); font:inherit; cursor:pointer; }
-.milestone-toggle:hover,.milestone-title:hover { background:var(--hover); }
-.milestone-title { border:0; background:none; text-align:left; font:inherit; font-weight:600; color:var(--text); cursor:pointer; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+button.milestone-title:hover { background:var(--hover); }
+.milestone-title { display:inline-flex; align-items:center; min-height:28px; border:0; background:none; text-align:left; font:inherit; font-weight:600; color:var(--text); min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+button.milestone-title { cursor:pointer; }
 .milestone-meta { color:var(--muted); font-size:11px; white-space:nowrap; }
 .action-menu { position:relative; }
 .action-menu > summary { list-style:none; cursor:pointer; font-size:12px; color:var(--text-2); padding:6px 9px; border:1px solid var(--line); border-radius:5px; background:var(--surface); white-space:nowrap; }
@@ -2044,10 +2046,10 @@ let readGeneration = 0;
 let renderPending = false;
 let activeTab = localStorage.getItem('tracking-tab') === 'projects' ? 'projects' : 'things';
 let selectedProject = localStorage.getItem('tracking-project') || '';
+let showCompletedProjectItems = localStorage.getItem('tracking-show-completed') === 'true';
 let dialogContext = null;
 const fieldDrafts = new Map();
 const addDrafts = new Map();
-const milestoneExpanded = new Map();
 const thingRenderer = render;
 
 function el(tag, cls, text) {
@@ -2496,22 +2498,17 @@ function renderMilestone(p,m) {
   const tasks=m?milestoneTasks(m):projectTasks(p).filter(t=>!t.milestone_id||!milestoneById(t.milestone_id)||milestoneById(t.milestone_id).deleted_at);
   tasks.sort((a,b)=>Number(!!a.done)-Number(!!b.done)||nextOrder(a,b));
   const complete=tasks.length>0&&tasks.every(t=>t.done);
-  const key=m?.id||p.id+':unscheduled';
-  const expanded=milestoneExpanded.has(key)?milestoneExpanded.get(key):!complete;
+  if(complete&&!showCompletedProjectItems)return null;
   const section=el('section','milestone'+(!tasks.length?' empty':''));if(m)section.dataset.milestoneId=m.id;
   const header=el('div','milestone-head');
-  const toggle=()=>{milestoneExpanded.set(key,!expanded);renderProjectDetail();};
-  const disclosure=btn(complete?'✓':expanded?'▾':'▸',toggle,'milestone-toggle');
-  disclosure.setAttribute('aria-expanded',String(expanded));
-  disclosure.setAttribute('aria-label',(expanded?'收起':'展开')+(m?.name||'待安排'));
-  const heading=btn(m?.name||'待安排',m&&!p.deleted_at?()=>openEntity('milestone',m,p):toggle,'milestone-title');
+  const heading=m&&!p.deleted_at?btn(m.name,()=>openEntity('milestone',m,p),'milestone-title'):el('span','milestone-title',m?.name||'待安排');
   if(m&&!p.deleted_at)heading.title='点击编辑里程碑';
-  header.append(disclosure,heading);
+  header.append(heading);
   const metaText=[m?.owner||p.owner||'Ocean',m?.due||'',tasks.length?`${tasks.filter(t=>t.done).length}/${tasks.length} 完成`:'待拆事项'].filter(Boolean).join(' · ');
   header.append(el('span','milestone-meta',metaText));
   section.append(header);
-  const body=el('div');body.hidden=!expanded;
-  const ul=el('ul');for(const t of tasks)ul.append(renderTask(t));body.append(ul);
+  const body=el('div');
+  const ul=el('ul');for(const t of tasks)if(showCompletedProjectItems||!t.done)ul.append(renderTask(t));body.append(ul);
   if(!p.deleted_at)body.append(milestoneAddForm(p,m));
   section.append(body);return section;
 }
@@ -2523,6 +2520,14 @@ function renderProjectDetail() {
   const actions=el('div','project-actions');
   const buttons=[];
   if(p&&!p.deleted_at) {
+    const completedLabel=el('label','completed-visibility');
+    const completed=el('input');completed.type='checkbox';completed.id='showCompletedProjectItems';completed.checked=showCompletedProjectItems;
+    completed.title='显示已完成的事项和里程碑';
+    completed.addEventListener('change',()=>{
+      showCompletedProjectItems=completed.checked;localStorage.setItem('tracking-show-completed',String(showCompletedProjectItems));
+      requestRender();document.getElementById('showCompletedProjectItems')?.focus({preventScroll:true});
+    });
+    completedLabel.append(completed,el('span','','显示已完成'));actions.append(completedLabel);
     buttons.push(btn('添加里程碑',()=>openEntity('milestone',null,p)),btn('编辑',()=>openEntity('project',p)),btn('归档',()=>mutate('/projects/'+encodeURIComponent(p.id),'PATCH',{archived:true})),btn('删除',()=>{if(confirm('删除「'+p.name+'」？\n项目会隐藏，可在项目设置中恢复；事项仍保留在事情跟进中。'))mutate('/projects/'+encodeURIComponent(p.id),'DELETE');},'danger'));
   }
   if(state.projects.some(project=>project.archived||project.deleted_at))buttons.push(btn('恢复项目',openProjectRestore));
@@ -2537,9 +2542,10 @@ function renderProjectDetail() {
   if(progress.next)summary.append(el('span','','下一步：'+progress.next.text));
   if(progress.overdue)summary.append(el('span','overdue-text',progress.overdue+' 项逾期'));
   if(progress.tasks.length)root.append(summary);
-  progress.milestones.forEach(m=>root.append(renderMilestone(p,m)));
+  progress.milestones.forEach(m=>{const section=renderMilestone(p,m);if(section)root.append(section);});
   const hasUnscheduled=projectTasks(p).some(t=>!t.milestone_id||!milestoneById(t.milestone_id)||milestoneById(t.milestone_id).deleted_at);
-  if(hasUnscheduled||!progress.milestones.length)root.append(renderMilestone(p,null));
+  if(hasUnscheduled||!progress.milestones.length){const section=renderMilestone(p,null);if(section)root.append(section);}
+  if(!root.querySelector('.milestone'))root.append(el('p','project-hint','暂无未完成事项'));
   const deleted=state.milestones.filter(m=>m.project_id===p.id&&m.deleted_at);
   if(deleted.length){
     const section=el('details','deleted-milestones');section.append(el('summary','',`已删除里程碑（${deleted.length}）`));
