@@ -178,7 +178,7 @@ def main():
             milestones = server.read_data()["milestones"]
             first, second = milestones[0]["id"], milestones[1]["id"]
             assert page.locator(".milestone.empty").count() >= 2
-            assert "待拆事项" in page.locator("#projectDetail").inner_text()
+            assert "待拆事项" not in page.locator("#projectDetail").inner_text()
             assert page.locator(".project-progress").count() == 0
             assert page.locator('.milestone:not([data-milestone-id])').count() == 0, "Empty pending area must disappear once milestones exist"
             assert page.locator(".project-owner, .milestone-actions, .milestone-section-heading").count() == 0

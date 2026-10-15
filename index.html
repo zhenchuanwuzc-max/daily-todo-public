@@ -2576,7 +2576,7 @@ function renderMilestone(p,m) {
   const heading=m&&!p.deleted_at?btn(m.name,()=>openEntity('milestone',m,p),'milestone-title'):el('span','milestone-title',m?.name||'待安排');
   if(m&&!p.deleted_at)heading.title='点击编辑里程碑';
   header.append(heading);
-  const metaText=[m?.owner||p.owner||'Ocean',m?.due||'',tasks.length?`${tasks.filter(t=>t.done).length}/${tasks.length} 完成`:'待拆事项'].filter(Boolean).join(' · ');
+  const metaText=[m?.owner||p.owner||'Ocean',m?.due||'',tasks.length?`${tasks.filter(t=>t.done).length}/${tasks.length} 完成`:''].filter(Boolean).join(' · ');
   header.append(el('span','milestone-meta',metaText));
   section.append(header);
   const body=el('div');
