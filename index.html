@@ -759,10 +759,11 @@ body { min-width:900px; padding:16px 20px; }
 .project-item small { display:block; margin-top:5px; color:var(--muted); font-size:11px; }
 .project-item[aria-current=true] { background:#eaf3f0; border-color:#d4e7e0; color:var(--accent); }
 .project-item:hover { background:var(--hover); }
-.project-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px; }
-.project-heading h2 { font-size:19px; margin-bottom:7px; }
-.project-heading p { color:var(--text-2); line-height:1.6; white-space:pre-wrap; }
-.project-actions { display:flex; gap:6px; white-space:nowrap; }
+.project-heading { position:sticky; top:0; z-index:30; display:flex; justify-content:space-between; align-items:center; gap:12px; padding:4px 0; margin-bottom:4px; background:var(--bg); }
+.project-heading > div:first-child { min-width:0; }
+.project-heading h2 { font-size:14px; font-weight:600; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.project-goal { color:var(--text-2); line-height:1.6; white-space:pre-wrap; margin:4px 0 12px; }
+.project-actions { display:flex; flex-shrink:0; gap:6px; white-space:nowrap; }
 .project-actions button,.subtle-button,.dialog-actions button,.entity-milestone-actions button { border:1px solid var(--line); background:var(--surface); color:var(--text-2); font-family:inherit; border-radius:5px; padding:6px 9px; cursor:pointer; font-size:12px; }
 button.primary { background:var(--accent); border-color:var(--accent); color:white; }
 button.danger { color:#b42318; }
@@ -770,7 +771,8 @@ button:disabled { cursor:default; opacity:.5; }
 .project-progress { display:flex; gap:12px; padding:12px; border-radius:7px; background:#f1f4ef; font-size:12px; color:var(--text-2); margin-bottom:20px; line-height:1.7; flex-wrap:wrap; }
 .project-progress b { color:var(--text); }
 .milestone { margin-bottom:18px; }
-.milestone-head { display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line); padding:10px 0; }
+.milestone.empty { padding:0; }
+.milestone-head { display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line); padding:6px 0; }
 .milestone-toggle { flex-shrink:0; width:24px; min-height:28px; padding:0; border:0; border-radius:4px; background:none; color:var(--text-2); font:inherit; cursor:pointer; }
 .milestone-toggle:hover,.milestone-title:hover { background:var(--hover); }
 .milestone-title { border:0; background:none; text-align:left; font:inherit; font-weight:600; color:var(--text); cursor:pointer; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -2511,8 +2513,7 @@ function renderProjectDetail() {
   const root=document.getElementById('projectDetail');root.replaceChildren();
   const p=projectById(selectedProject);
   const heading=el('div','project-heading');const title=el('div');
-  if(p)title.append(el('h2','',p.name));
-  if(p?.goal)title.append(el('p','',p.goal));heading.append(title);
+  if(p){const name=el('h2','',p.name);name.title=p.name;title.append(name);}heading.append(title);
   const actions=el('div','project-actions');
   const buttons=[btn('新增项目',()=>openEntity('project'))];
   if(p&&!p.deleted_at) {
@@ -2522,6 +2523,7 @@ function renderProjectDetail() {
   actions.append(settingsMenu('项目设置',buttons));
   heading.append(actions);root.append(heading);
   if(!p){root.append(el('div','project-empty','选择一个项目查看进展，或在「项目设置」中新增项目。'));return;}
+  if(p.goal)root.append(el('p','project-goal',p.goal));
   if(p.deleted_at){root.append(el('p','project-hint','项目在回收站；事项仍保留在「事情跟进」。恢复项目后恢复尚未调整的关联。'));return;}
   const progress=projectProgress(p);
   const summary=el('div','project-progress');

@@ -57,6 +57,12 @@ def main():
                 page.evaluate("document.activeElement?.blur()")
                 page.wait_for_function("mutationCount === 0 && !renderPending")
 
+            def assert_compact_sticky_heading():
+                title = page.locator("#projectDetail .project-heading h2")
+                assert title.count() == 1
+                assert title.evaluate("node => parseFloat(getComputedStyle(node).fontSize)") <= 14
+                assert page.locator("#projectDetail .project-heading").evaluate("node => getComputedStyle(node).position") == "sticky"
+
             def task_named(name):
                 return next(t for t in server.read_data()["tasks"] if t.get("text") == name and not t.get("deleted_at"))
 
@@ -128,7 +134,7 @@ def main():
                 assert not menu.evaluate("node => node.open"), "Escape must dismiss settings"
                 menu.locator("summary").click()
                 assert menu.evaluate("node => node.open")
-                page.locator("#projectDetail .project-heading h2").click()
+                page.mouse.click(4, 4)  # Bare page margin: closes the menu without selecting or rerendering.
                 assert not menu.evaluate("node => node.open"), "Clicking outside must dismiss settings"
                 settle()
 
@@ -151,6 +157,7 @@ def main():
             menu_action(".project-actions", "新增项目")
             save_entity("体验优化项目", "项目负责人", core=True)
             project_id = server.read_data()["projects"][0]["id"]
+            assert_compact_sticky_heading()
             assert page.locator(".project-progress").count() == 0, "An empty project must not show an empty progress card"
             assert page.locator("#coreSummary").is_hidden(), "Project tab must not repeat the core summary"
             assert page.locator('.milestone:not([data-milestone-id])').count() == 1
@@ -225,6 +232,18 @@ def main():
             settle()
             assert "当前：方案确认" in page.locator(".project-progress").inner_text()
             page.screenshot(path=str(output / f"projects-{engine}.png"), full_page=True)
+            # Test actual sticky positioning with a temporary DOM spacer; no task data is changed.
+            assert_compact_sticky_heading()
+            saved_scroll = page.evaluate("({x:scrollX,y:scrollY})")
+            page.evaluate("""() => {
+                const spacer=document.createElement('div');
+                spacer.id='browser-test-scroll-spacer';spacer.style.height='1800px';
+                document.querySelector('#projectDetail').append(spacer);
+                const heading=document.querySelector('#projectDetail .project-heading');
+                window.scrollTo(0,scrollY+heading.getBoundingClientRect().top+150);
+            }""")
+            page.wait_for_function("Math.abs(document.querySelector('#projectDetail .project-heading').getBoundingClientRect().top - parseFloat(getComputedStyle(document.querySelector('#projectDetail .project-heading')).top)) <= 1")
+            page.evaluate("position => {document.querySelector('#browser-test-scroll-spacer').remove();window.scrollTo(position.x,position.y);}", saved_scroll)
 
             # Keep a third item linked so unlink and automatic restoration are tested separately.
             retained_task = add_in_milestone(first, "里程碑恢复关联验证")
@@ -302,7 +321,8 @@ def main():
             save_entity("体验优化项目已修改", "项目负责人已修改")
             assert server.read_data()["projects"][0]["name"] == "体验优化项目已修改"
             assert server.read_data()["projects"][0]["owner"] == "项目负责人已修改"
-            assert "体验优化项目已修改" in page.locator("#projectDetail .project-heading h2").inner_text()
+            assert "体验优化项目已修改" in page.locator('.project-item[aria-current="true"] strong').inner_text()
+            assert_compact_sticky_heading()
             assert page.locator("#projectSearch").count() == 0
             menu_action(".project-actions", "归档")
             settle()
@@ -411,7 +431,8 @@ def main():
             page.set_viewport_size({"width": 1100, "height": 850})
             page.reload()
             page.locator("#projectDetail .project-heading").wait_for()
-            assert "体验优化项目已修改" in page.locator("#projectDetail").inner_text()
+            assert "体验优化项目已修改" in page.locator('.project-item[aria-current="true"] strong').inner_text()
+            assert_compact_sticky_heading()
             assert page.locator(".project-owner, .milestone-actions, .milestone-section-heading").count() == 0
             assert "上线验收已更新" in page.locator("#projectDetail").inner_text()
             page.locator("#thingsTab").click()
