@@ -6,7 +6,8 @@
 
 - 新建普通事项必填内容、负责人、截止日期；负责人默认 Ocean。截止日期不决定何时开始显示，未来截止的事项也立即进入清单。
 - 添加区默认显示事项、负责人、截止日期；优先级、分类、项目归属在「更多」中调整，收起保留已选值。
-- 事项行不再显示计划日按钮。原有 `due` 是计划日，继续控制旧的未来清单；新 `deadline` 是截止日期，不覆盖原有计划日。
+- 事项行不再显示计划日按钮，也不再单列未来事项。存量 `due` 原值保留，但不影响普通事项进入事情清单或拖动排序；`deadline` 继续独立用于截止提醒。
+- 顶部「重复任务」直接管理每日、每周、每月的模板，可添加和删除；删除模板保留已生成的事项。模板按原周期生成，新增后立即检查当日是否应生成，添加失败保留输入。
 - 项目页可新建、编辑、归档、删除和恢复项目；里程碑可新增多个、编辑、调整顺序、删除和恢复。
 - 左侧直接列出进行中的项目，不显示搜索与状态筛选；列表下方「＋ 新增项目」用于创建项目，空列表时也可用。右上角「项目设置」提供添加里程碑与当前项目操作。
 - 项目名称以紧凑小标题显示，和项目设置一起吸顶，长列表滚动时仍能确认当前项目。
@@ -42,6 +43,8 @@ TODO_TEST_BROWSER=webkit python3 tests/browser_projects.py
 python3 tests/browser_followup_config.py
 TODO_TEST_BROWSER=webkit python3 tests/browser_followup_config.py
 python3 tests/browser_reorder.py
+python3 tests/browser_recurring.py
+TODO_TEST_BROWSER=webkit python3 tests/browser_recurring.py
 ~/daily-todo/venv/bin/python setup.py py2app
 python3 scripts/install-local.py
 ```

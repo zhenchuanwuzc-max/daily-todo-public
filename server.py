@@ -578,11 +578,9 @@ def reorder_tasks(item):
         data = read_data()
         by_id = {t["id"]: t for t in data.get("tasks", [])}
         selected = [by_id.get(i) for i in ids]
-        today = today_str()
         for task in selected:
             if (task is None or task.get("deleted_at") or task.get("done")
                     or task.get("source") == "claude-suggest"
-                    or (task.get("due") or "") > today
                     or (task.get("recurring") in ("daily", "weekly", "monthly")
                         and not task.get("recur_source"))):
                 raise ValueError("列表已变化，请刷新后重新排序")

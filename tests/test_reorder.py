@@ -28,7 +28,7 @@ class ReorderTest(unittest.TestCase):
             {"id": "new", "text": "Concurrent addition", "priority": "P0"},
             {"id": "p1", "priority": "P1"},
             {"id": "done", "priority": "P0", "done": True},
-            {"id": "future", "priority": "P0", "due": "2999-01-01"},
+            {"id": "future", "priority": "P0", "due": "2999-01-01", "deadline": "2026-10-01"},
             {"id": "seed", "priority": "P0", "recurring": "daily"},
             {"id": "suggest", "priority": "P0", "source": "claude-suggest"},
         ]
@@ -73,11 +73,21 @@ class ReorderTest(unittest.TestCase):
                 server.reorder_tasks({"ids": ids})
             self.assertEqual(Path(server.DATA_FILE).read_bytes(), before)
 
+    def test_legacy_future_planned_date_allows_reordering_without_changing_dates(self):
+        original = next(task for task in self.tasks if task["id"] == "future")
+        server.reorder_tasks({"ids": ["future", "a"]})
+        tasks = {task["id"]: task for task in server.read_data()["tasks"]}
+        self.assertEqual(tasks["future"]["sort_order"], 0)
+        self.assertEqual(tasks["a"]["sort_order"], 1)
+        self.assertEqual(tasks["future"]["due"], original["due"])
+        self.assertEqual(tasks["future"]["deadline"], original["deadline"])
+        self.assertEqual(set(tasks["future"]["_field_updated"]), {"sort_order"})
+
     def test_invalid_or_stale_moves_do_not_write(self):
         with open(server.DATA_FILE) as handle:
             before = handle.read()
         for ids in [[], ["a"], ["a", "a"], ["a", {}], ["a", "missing"],
-                    ["a", "p1"], ["a", "done"], ["a", "future"],
+                    ["a", "p1"], ["a", "done"],
                     ["a", "seed"], ["a", "suggest"]]:
             with self.subTest(ids=ids), self.assertRaises(ValueError):
                 server.reorder_tasks({"ids": ids})

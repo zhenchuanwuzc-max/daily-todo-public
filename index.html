@@ -572,128 +572,53 @@
   }
   .dp-confirm:hover { opacity: 0.9; }
 
-  /* === 未来项弹窗 === */
-  .future-empty {
-    color: var(--muted); padding: 40px 4px;
-    font-size: 13px; font-style: normal; text-align: center;
-  }
-  .future-day { margin-bottom: 22px; }
-  .future-day-head {
-    display: flex; align-items: baseline; gap: 10px;
-    padding: 0 4px 6px;
-    border-bottom: 1px solid var(--line);
-    margin-bottom: 2px;
-  }
-  .future-day-head .fd-date {
-    font-size: 14px; font-weight: 600; color: var(--text);
-    font-variant-numeric: tabular-nums;
-  }
-  .future-day-head .fd-dow {
-    font-size: 12px; color: var(--text-2);
-  }
-  .future-day-head .fd-count {
-    font-size: 12px; color: var(--muted);
-  }
-  .future-day-head .fd-rel {
-    margin-left: auto;
-    font-size: 11px; color: var(--accent);
-    font-weight: 500;
-  }
-  .future-day ul { list-style: none; padding: 0; }
-  /* 未来项弹窗：让 summary 紧贴 title，× 留右 */
-  #futureModal .modal-head h2 { margin-right: 0; }
-  #futureSummary {
-    font-size: 13px; color: var(--text-2);
-    font-variant-numeric: tabular-nums;
-    margin-right: auto;
-  }
-
-  /* === 每日任务（种子）区块：底部管理入口，视觉降级 === */
-  .recur-section {
-    margin-top: 28px; padding-top: 14px;
-    border-top: 1px solid var(--line);
-  }
-  .recur-section-head {
-    display: flex; align-items: baseline; gap: 6px;
-    padding: 0 4px 6px;
-  }
-  .recur-section-head .rs-title {
-    font-size: 12px; font-weight: 500;
-    color: var(--text-2);
-    letter-spacing: 0.02em;
-  }
-  .recur-section-head .rs-count {
-    font-size: 11px; color: var(--muted);
-    font-variant-numeric: tabular-nums;
-  }
-  .recur-section-head .rs-hint {
-    margin-left: auto;
-    font-size: 11px; color: var(--muted);
-  }
+  /* === 重复任务弹窗 === */
+  #recurringModal .modal-card { max-width: 760px; }
+  #recurringModal .modal-head { margin-bottom: 0; padding: 14px 0; }
+  #recurringModal .modal-head h2 { margin-right: 0; }
+  #recurringSummary { font-size: 12px; color: var(--muted); margin-right: auto; }
   .recur-section ul { list-style: none; padding: 0; margin: 0; }
+  .recur-empty { color: var(--muted); padding: 20px 4px 12px; font-size: 13px; }
   .recur-seed {
-    display: flex; align-items: center; gap: 8px;
-    padding: 5px 4px;
-    font-size: 12px;
+    display: flex; align-items: center; gap: 10px;
+    min-height: 48px; padding: 10px 4px; font-size: 13px;
+    border-bottom: 1px solid var(--line-soft);
   }
-  .recur-seed:hover { background: var(--bg-2); border-radius: 4px; }
-  .recur-seed .rs-icon {
-    font-size: 11px; opacity: 0.55;
-  }
-  .recur-seed .rs-text {
-    flex: 1; color: var(--text-2);
-  }
-  .recur-seed .rs-schedule {
-    font-size: 10px; color: var(--accent);
-    white-space: nowrap;
-  }
+  .recur-seed:hover { background: var(--hover); }
+  .recur-seed .rs-text { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--text); }
+  .recur-seed .rs-schedule { flex: 0 0 80px; font-size: 12px; color: var(--accent); white-space: nowrap; }
   .recur-seed .rs-pri {
-    font-size: 10px; padding: 0 5px; border-radius: 3px;
-    background: var(--bg-2); color: var(--muted);
+    font-size: 11px; padding: 2px 5px; border-radius: 3px;
+    background: var(--bg); color: var(--text-2);
   }
-  .recur-seed .rs-tag {
-    font-size: 10px; color: var(--muted);
-  }
+  .recur-seed .rs-tag { font-size: 11px; color: var(--muted); white-space: nowrap; }
   .recur-seed .rs-del {
-    background: none; border: none; color: var(--muted);
-    cursor: pointer; font-size: 14px; padding: 0 4px;
-    opacity: 0.5;
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font: inherit; font-size: 12px; min-height: 32px; padding: 0 6px; white-space: nowrap;
   }
-  .recur-seed:hover .rs-del { opacity: 1; }
   .recur-seed .rs-del:hover { color: #d44; }
-
-  /* 添加按钮：默认是个低调入口，点了才展开 form */
   .recur-add-toggle {
-    display: block; width: 100%;
-    margin-top: 6px; padding: 6px 4px;
-    background: none; border: none;
-    color: var(--muted); font-size: 11px;
-    cursor: pointer; text-align: left;
-    font-family: inherit;
+    display: block; width: 100%; margin-top: 8px; padding: 8px 4px;
+    background: none; border: none; color: var(--accent); font-size: 13px;
+    cursor: pointer; text-align: left; font-family: inherit;
   }
-  .recur-add-toggle:hover { color: var(--accent); }
-  .recur-add-form {
-    display: none; gap: 6px; align-items: center;
-    padding: 8px 4px 0; margin-top: 2px;
-  }
+  .recur-add-toggle:hover { background: var(--hover); }
+  .recur-add-form { display: none; gap: 10px; align-items: end; flex-wrap: wrap; padding: 10px 4px 0; }
   .recur-add-form.show { display: flex; }
-  .recur-add-form [hidden] { display: none; }
-  .recur-add-form input {
-    flex: 1; padding: 5px 10px; font-size: 12px;
-    border: 1px solid var(--line); border-radius: 6px;
-    background: var(--bg); color: var(--text); font-family: inherit;
-  }
-  .recur-add-form select {
-    padding: 5px 6px; font-size: 11px; font-family: inherit;
-    border: 1px solid var(--line); border-radius: 6px;
-    background: var(--bg); color: var(--text);
+  .recur-add-form label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--text-2); }
+  .recur-add-form .recur-text-field { flex-basis: 100%; }
+  .recur-add-form input, .recur-add-form select {
+    min-width: 0; min-height: 34px; padding: 6px 10px; font: inherit; font-size: 13px;
+    border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text);
   }
   .recur-add-form button {
-    padding: 5px 10px; font-size: 11px;
-    background: var(--accent); color: white; border: none;
-    border-radius: 6px; cursor: pointer; font-family: inherit;
+    min-height: 34px; margin-left: auto; padding: 6px 16px; font: inherit; font-size: 13px;
+    background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer;
   }
   .recur-add-form button:hover { opacity: 0.9; }
+  .recur-add-form :disabled { opacity: 0.55; cursor: wait; }
+  #recurError { flex-basis: 100%; color: #b91c1c; font-size: 12px; }
+  #recurError:empty { display: none; }
 /* Project tracking: shared, compact inline task rows. */
 [hidden] { display:none !important; }
 body { min-width:900px; padding:16px 20px; }
@@ -725,14 +650,14 @@ body { min-width:900px; padding:16px 20px; }
 .add #newTaskMore { border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--text-2); cursor:pointer; }
 .add #newTaskMore[aria-expanded=true] { color:var(--accent); background:#eaf3f0; }
 .new-task-options { display:grid; grid-template-columns:130px 130px minmax(200px,1fr); gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
-.inline-task { flex-wrap:nowrap; min-height:48px; gap:7px !important; }
+.inline-task { flex-wrap:nowrap; min-height:48px; gap:5px !important; }
 .inline-task .text { flex:1 1 auto; min-width:80px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:5px 2px; border:1px solid transparent; border-radius:4px; }
 .inline-task .text:focus { outline:0; border-color:#b5d6ce; background:var(--surface); text-overflow:clip; }
 .inline-task .owner-input { flex:0 0 66px; width:66px; }
-.inline-task .deadline-wrap { flex:0 0 160px; position:relative; display:flex; align-items:center; gap:3px; }
+.inline-task .deadline-wrap { flex:0 0 136px; position:relative; display:flex; align-items:center; gap:3px; }
 .inline-task .date-status { font-size:10px; color:var(--accent); white-space:nowrap; }
 .inline-task .overdue .date-status { color:#b42318; }
-.inline-task .deadline-input { width:128px; }
+.inline-task .deadline-input { width:112px; }
 .inline-task .deadline-wrap.empty-date input:not(:focus) { color:transparent; }
 .inline-task .deadline-wrap.empty-date::after { content:'未设截止'; pointer-events:none; position:absolute; left:5px; top:7px; color:var(--muted); font-size:11px; }
 .inline-task .deadline-wrap:focus-within::after { display:none; }
@@ -854,7 +779,7 @@ button.milestone-title { cursor:pointer; }
   </div>
     <div class="header-right" role="group" aria-label="页面操作">
       <button class="btn-icon" id="syncBtn" title="手动同步：拉取其他设备的最新改动并刷新">🔄 同步</button>
-      <button class="btn-icon" id="futureBtn" title="未来项（30 天内已计划但未到日）">📅 未来</button>
+      <button class="btn-icon" id="recurringBtn" title="管理每天、每周、每月的重复任务">🔁 重复任务</button>
       <button class="btn-icon" id="reviewBtn" title="周复盘">📊 复盘</button>
     </div>
 </div>
@@ -957,16 +882,16 @@ button.milestone-title { cursor:pointer; }
   <div class="toast-progress"><div class="toast-bar" id="toastBar"></div></div>
 </div>
 
-<!-- 未来项模态框 -->
-<div class="modal" id="futureModal">
-  <div class="modal-bg" data-close="future"></div>
-  <div class="modal-card">
+<!-- 重复任务模态框 -->
+<div class="modal" id="recurringModal">
+  <div class="modal-bg" data-close="recurring"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="recurringTitle" tabindex="-1">
     <div class="modal-head">
-      <h2>📅 未来项</h2>
-      <span id="futureSummary">—</span>
-      <button class="close" data-close="future">×</button>
+      <h2 id="recurringTitle">重复任务</h2>
+      <span id="recurringSummary"></span>
+      <button class="close" data-close="recurring" aria-label="关闭重复任务">×</button>
     </div>
-    <div id="futureList"></div>
+    <div id="recurringList"></div>
   </div>
 </div>
 
@@ -1317,15 +1242,13 @@ function render() {
   root.innerHTML = "";
   const today = todayStr();
 
-  // 分桶：未来项（due > 今天）单独走 future，不进主列表
-  // 重复任务种子 = 模板，不在主列表显示，只在「重复任务」区块管理
-  const buckets = { suggest: [], P0: [], P1: [], P2: [], PN: [], done: [], future: [] };
+  // 普通事项立即显示；重复任务模板只在「重复任务」中管理。
+  const buckets = { suggest: [], P0: [], P1: [], P2: [], PN: [], done: [] };
   for (const t of state.tasks) {
     if (t.deleted_at) continue;
     if (isRecurringSeed(t)) continue;
     if (t.done) { if (t.done_at && localDateKey(t.done_at) === today) buckets.done.push(t); continue; }
     if (t.source === "claude-suggest") { buckets.suggest.push(t); continue; }  // Claude 建议隔离区，待 Ocean 审
-    if (t.due && t.due > today) { buckets.future.push(t); continue; }
     if (PRI_ORDER.includes(visiblePriority(t))) buckets[visiblePriority(t)].push(t);
     else buckets.PN.push(t);
   }
@@ -1356,20 +1279,14 @@ function render() {
   document.getElementById("meta").textContent =
     "更新 " + (state.updated || "—").replace("T", " ").slice(0, 16);
 
-  // 未来按钮 badge
-  const fBtn = document.getElementById("futureBtn");
-  fBtn.textContent = `📅 未来${buckets.future.length ? ` (${buckets.future.length})` : ""}`;
-
-  if (nOpen === 0 && buckets.done.length === 0 && buckets.future.length === 0 && buckets.suggest.length === 0) {
+  if (nOpen === 0 && buckets.done.length === 0 && buckets.suggest.length === 0) {
     root.innerHTML = '<div class="empty">还没有待办，加一件？</div>';
-  } else if (nOpen === 0 && buckets.future.length > 0 && buckets.suggest.length === 0) {
-    root.innerHTML = `<div class="empty">今天已清空 ✓ — ${buckets.future.length} 件未来项待启动（点右上「📅 未来」查看）</div>`;
   }
 
-  // 未来弹窗如果开着，同步刷新
+  // 弹窗打开时同步刷新模板列表，保留添加表单。
   renderPriorityNav(buckets);
-  if (document.getElementById("futureModal").classList.contains("show")) {
-    renderFuture();
+  if (document.getElementById("recurringModal").classList.contains("show")) {
+    renderRecurring();
   }
 }
 
@@ -1851,10 +1768,10 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (activeDatePicker) { closeDatePicker(); return; }
   if (document.getElementById("reviewModal").classList.contains("show")) closeReview();
-  if (document.getElementById("futureModal").classList.contains("show")) closeFuture();
+  if (document.getElementById("recurringModal").classList.contains("show")) closeRecurring();
 });
 
-// ============== 未来项弹窗 ==============
+// ============== 重复任务弹窗 ==============
 function scheduleLabel(seed) {
   if (seed.recurring === "daily") return "每天";
   if (seed.recurring === "weekly") {
@@ -1865,43 +1782,18 @@ function scheduleLabel(seed) {
 }
 
 function renderRecurSection() {
-  const seeds = state.tasks.filter(t => !t.deleted_at && isRecurringSeed(t));
-  seeds.sort((a, b) => (a.created || "").localeCompare(b.created || ""));
-
-  let html = `
+  return `
     <div class="recur-section">
-      <div class="recur-section-head">
-        <span class="rs-title">📌 重复任务</span>
-        <span class="rs-count">${seeds.length}</span>
-        <span class="rs-hint">命中日期 00:01 自动入列</span>
-      </div>
-      <ul>`;
-  if (seeds.length === 0) {
-    html += `<li class="recur-seed" style="justify-content:center;color:var(--muted);">还没设置重复任务</li>`;
-  } else {
-    for (const s of seeds) {
-      html += `
-        <li class="recur-seed" data-id="${escapeHtml(s.id)}">
-          <span class="rs-icon">🔁</span>
-          <span class="rs-text">${escapeHtml(s.text)}</span>
-          <span class="rs-schedule">${escapeHtml(scheduleLabel(s))}</span>
-          <span class="rs-pri">${escapeHtml(visiblePriority(s) || "P1")}</span>
-          <span class="rs-tag">${escapeHtml(s.tag || "personal")}</span>
-          <button class="rs-del" data-action="del-seed" data-id="${escapeHtml(s.id)}" title="删除（历史实例保留）">×</button>
-        </li>`;
-    }
-  }
-  html += `
-      </ul>
-      <button class="recur-add-toggle" id="recurAddToggle">+ 添加重复任务</button>
-      <div class="recur-add-form" id="recurAddForm">
-        <input id="recurNewText" type="text" placeholder="例如「每周项目复盘」…" maxlength="200">
-        <select id="recurNewFrequency" title="重复频率">
+      <ul id="recurSeeds"></ul>
+      <button class="recur-add-toggle" id="recurAddToggle" aria-controls="recurAddForm" aria-expanded="false">＋ 添加重复任务</button>
+      <form class="recur-add-form" id="recurAddForm">
+        <label class="recur-text-field">事项<input id="recurNewText" type="text" placeholder="例如：每周项目复盘" maxlength="200" required autocomplete="off"></label>
+        <label>重复频率<select id="recurNewFrequency" title="重复频率">
           <option value="daily">每日</option>
           <option value="weekly">每周</option>
           <option value="monthly">每月</option>
-        </select>
-        <select id="recurNewWeekday" title="星期" hidden>
+        </select></label>
+        <label hidden>星期<select id="recurNewWeekday" title="星期">
           <option value="1">周一</option>
           <option value="2">周二</option>
           <option value="3">周三</option>
@@ -1909,22 +1801,22 @@ function renderRecurSection() {
           <option value="5">周五</option>
           <option value="6">周六</option>
           <option value="7">周日</option>
-        </select>
-        <select id="recurNewMonthday" title="每月日期" hidden></select>
-        <select id="recurNewPri" title="优先级">
+        </select></label>
+        <label hidden>每月日期<select id="recurNewMonthday" title="每月日期"></select></label>
+        <label>优先级<select id="recurNewPri" title="优先级">
           <option value="P0">P0</option>
           <option value="P1" selected>P1</option>
           <option value="P2">P2</option>
-        </select>
-        <select id="recurNewTag" title="分类">
-          <option value="work">work</option>
-          <option value="startup">startup</option>
-          <option value="personal" selected>personal</option>
-        </select>
-        <button id="recurAddBtn">添加</button>
-      </div>
+        </select></label>
+        <label>分类<select id="recurNewTag" title="分类">
+          <option value="work">工作</option>
+          <option value="startup">创业</option>
+          <option value="personal" selected>个人</option>
+        </select></label>
+        <button id="recurAddBtn" type="submit">添加</button>
+        <p id="recurError" role="alert"></p>
+      </form>
     </div>`;
-  return html;
 }
 
 async function addRecurSeed(text, priority, tag, recurring, weekday, monthday) {
@@ -1944,7 +1836,7 @@ function deleteRecurSeed(seedId) {
     ? "删除重复任务模板？\n已生成的历史实例（含未完成的）会保留为普通任务。"
     : "删除重复任务模板？";
   if (!confirm(msg)) return;
-  mutate("/todos/" + encodeURIComponent(seedId), "DELETE");
+  return mutate("/todos/" + encodeURIComponent(seedId), "DELETE");
 }
 
 function bindRecurSection(root) {
@@ -1955,134 +1847,102 @@ function bindRecurSection(root) {
   const frequency = root.querySelector("#recurNewFrequency");
   const weekday = root.querySelector("#recurNewWeekday");
   const monthday = root.querySelector("#recurNewMonthday");
-
-  if (monthday) {
-    monthday.innerHTML = Array.from(
-      { length: 31 }, (_, index) => `<option value="${index + 1}">${index + 1} 日</option>`
-    ).join("");
-    monthday.value = "13";
-  }
+  const errorText = root.querySelector("#recurError");
+  monthday.innerHTML = Array.from(
+    { length: 31 }, (_, index) => `<option value="${index + 1}">${index + 1} 日</option>`
+  ).join("");
+  monthday.value = "13";
   function syncScheduleControls() {
-    if (!frequency || !weekday || !monthday) return;
-    weekday.hidden = frequency.value !== "weekly";
-    monthday.hidden = frequency.value !== "monthly";
+    weekday.parentElement.hidden = frequency.value !== "weekly";
+    monthday.parentElement.hidden = frequency.value !== "monthly";
   }
-  if (frequency) {
-    frequency.addEventListener("change", syncScheduleControls);
-    syncScheduleControls();
-  }
-
-  if (toggle && form) {
-    toggle.addEventListener("click", () => {
-      const showing = form.classList.toggle("show");
-      toggle.textContent = showing ? "× 收起" : "+ 添加重复任务";
-      if (showing && addInput) addInput.focus();
-    });
-  }
-  if (addBtn && addInput) {
-    addBtn.addEventListener("click", async () => {
-      const text = addInput.value.trim();
-      const pri = root.querySelector("#recurNewPri").value;
-      const tag = root.querySelector("#recurNewTag").value;
-      if (!text) return;
-      addBtn.disabled = true;
-      try {
-        await addRecurSeed(
-          text,
-          pri,
-          tag,
-          frequency.value,
-          weekday.value,
-          monthday.value
-        );
-        addInput.value = "";
-      } catch (error) {
-        alert(error.message || "添加重复任务失败");
-      } finally {
-        addBtn.disabled = false;
-      }
-    });
-    addInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        addBtn.click();
-      }
-    });
-  }
-  root.querySelectorAll('[data-action="del-seed"]').forEach(btn => {
-    btn.addEventListener("click", () => deleteRecurSeed(btn.dataset.id));
+  frequency.addEventListener("change", syncScheduleControls);
+  syncScheduleControls();
+  toggle.addEventListener("click", () => {
+    const showing = form.classList.toggle("show");
+    toggle.textContent = showing ? "收起" : "＋ 添加重复任务";
+    toggle.setAttribute("aria-expanded", String(showing));
+    if (showing) addInput.focus();
+  });
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    if (form.dataset.saving === 'true') return;
+    const text = addInput.value.trim();
+    if (!text) { addInput.focus(); return; }
+    errorText.textContent = '';
+    form.dataset.saving = 'true';
+    const controls = [...form.querySelectorAll('input,select,button')];
+    controls.forEach(n => n.disabled = true);
+    addBtn.textContent = '添加中…';
+    try {
+      await addRecurSeed(text, root.querySelector("#recurNewPri").value,
+        root.querySelector("#recurNewTag").value, frequency.value, weekday.value, monthday.value);
+      addInput.value = "";
+    } catch (error) {
+      errorText.textContent = error.message || "添加重复任务失败，输入已保留";
+    } finally {
+      form.dataset.saving = 'false';
+      controls.forEach(n => n.disabled = false);
+      addBtn.textContent = '添加';
+      if (document.getElementById('recurringModal').classList.contains('show')) addInput.focus();
+    }
+  });
+  root.querySelector('#recurSeeds').addEventListener('click', async e => {
+    const button = e.target.closest('[data-action="del-seed"]');
+    if (!button || button.disabled) return;
+    button.disabled = true;
+    try { await deleteRecurSeed(button.dataset.id); }
+    finally { button.disabled = false; }
   });
 }
 
-function renderFuture() {
-  const today = todayStr();
-  const items = state.tasks.filter(t => !t.deleted_at && !t.done && t.due && t.due > today);
-  items.sort((a, b) => a.due.localeCompare(b.due));
-
-  const root = document.getElementById("futureList");
-  root.innerHTML = "";
-  const seedCount = state.tasks.filter(t => !t.deleted_at && isRecurringSeed(t)).length;
-  const sumParts = [`${items.length} 日常`];
-  if (seedCount > 0) sumParts.push(`${seedCount} 重复任务`);
-  document.getElementById("futureSummary").textContent = sumParts.join(" · ");
-
-  if (items.length === 0) {
-    const note = document.createElement("div");
-    note.className = "future-empty";
-    note.innerHTML = '还没有未来计划项<br>事项行里的「计划日」控制何时进入清单，截止日期用于提醒';
-    root.appendChild(note);
-    // 即便没有未来项，也要在底部展示重复任务区块（管理入口）
-    const recurWrap = document.createElement("div");
-    recurWrap.innerHTML = renderRecurSection();
-    root.appendChild(recurWrap);
-    bindRecurSection(recurWrap);
-    return;
+function renderRecurring() {
+  const root = document.getElementById("recurringList");
+  // Only the template list refreshes; drafts and in-flight form controls stay mounted.
+  if (!root.querySelector('.recur-section')) {
+    root.innerHTML = renderRecurSection();
+    bindRecurSection(root);
   }
-
-  // 按 due 分组（升序）
-  const byDate = {};
-  for (const t of items) {
-    (byDate[t.due] = byDate[t.due] || []).push(t);
+  const seeds = state.tasks.filter(t => !t.deleted_at && isRecurringSeed(t));
+  seeds.sort((a, b) => (a.created || "").localeCompare(b.created || ""));
+  document.getElementById("recurringSummary").textContent = `${seeds.length} 项`;
+  const list = root.querySelector('#recurSeeds');
+  const focusedId = list.contains(document.activeElement) ? document.activeElement.dataset.id : null;
+  list.innerHTML = seeds.length ? seeds.map(s => `
+    <li class="recur-seed" data-id="${escapeHtml(s.id)}">
+      <span class="rs-text">${escapeHtml(s.text)}</span>
+      <span class="rs-schedule">${escapeHtml(scheduleLabel(s))}</span>
+      <span class="rs-pri">${escapeHtml(visiblePriority(s) || "P1")}</span>
+      <span class="rs-tag">${escapeHtml(({work:'工作',startup:'创业',personal:'个人'})[s.tag] || s.tag || '个人')}</span>
+      <button class="rs-del" data-action="del-seed" data-id="${escapeHtml(s.id)}" aria-label="删除${escapeHtml(s.text)}" title="删除重复任务，保留已生成的事项">删除</button>
+    </li>`).join('') : '<li class="recur-empty">还没有重复任务</li>';
+  if (focusedId) {
+    const same = [...list.querySelectorAll('button')].find(b => b.dataset.id === focusedId);
+    (same || root.querySelector('#recurAddToggle')).focus();
   }
-  const todayD = new Date(today + "T00:00:00");
-  for (const date of Object.keys(byDate).sort()) {
-    const tasks = byDate[date];
-    const d = new Date(date + "T00:00:00");
-    const dow = "周" + DOW[(d.getDay() || 7) - 1];
-    const days = Math.round((d - todayD) / 86400000);
-    const rel = days === 1 ? "明天" : days <= 7 ? `${days} 天后` : `${days} 天后`;
-    const wrap = document.createElement("div");
-    wrap.className = "future-day";
-    const head = document.createElement("div");
-    head.className = "future-day-head";
-    head.innerHTML = `
-      <span class="fd-date">${fmtMD(d)}</span>
-      <span class="fd-dow">${dow}</span>
-      <span class="fd-count">${tasks.length} 件</span>
-      <span class="fd-rel">${rel}</span>
-    `;
-    const ul = document.createElement("ul");
-    tasks.forEach(t => ul.appendChild(renderTask(t)));
-    wrap.append(head, ul);
-    root.appendChild(wrap);
-  }
+}
+function openRecurring() {
+  renderRecurring();
+  const modal = document.getElementById("recurringModal");
+  modal.classList.add("show");
+  modal.querySelector('.close').focus();
+}
+function closeRecurring() {
+  document.getElementById("recurringModal").classList.remove("show");
+  document.getElementById('recurringBtn').focus();
+}
+document.getElementById("recurringBtn").addEventListener("click", openRecurring);
+document.querySelectorAll('[data-close="recurring"]').forEach(el =>
+  el.addEventListener("click", closeRecurring));
+document.getElementById('recurringModal').addEventListener('keydown', e => {
+  if (e.key !== 'Tab') return;
+  const controls = [...e.currentTarget.querySelectorAll('button,input,select')]
+    .filter(n => !n.disabled && n.getClientRects().length);
+  const first = controls[0], last = controls[controls.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
 
-  // 重复任务区块永远放在最底（管理入口，不喧宾）
-  const recurWrap = document.createElement("div");
-  recurWrap.innerHTML = renderRecurSection();
-  root.appendChild(recurWrap);
-  bindRecurSection(recurWrap);
-}
-function openFuture() {
-  renderFuture();
-  document.getElementById("futureModal").classList.add("show");
-}
-function closeFuture() {
-  document.getElementById("futureModal").classList.remove("show");
-}
-document.getElementById("futureBtn").addEventListener("click", openFuture);
-document.querySelectorAll('[data-close="future"]').forEach(el =>
-  el.addEventListener("click", closeFuture));
 </script>
 <script>
 // One record per task; both views use the same scoped, serialized write path.
