@@ -50,7 +50,8 @@ def main():
                     page.wait_for_function("mutationCount === 0 && !renderPending")
 
                 def menu_action(name):
-                    menu = page.locator(".project-actions details.action-menu")
+                    selector = "#globalSettings" if name in ("人员维护", "周报接收群") else ".project-actions details.action-menu"
+                    menu = page.locator(selector)
                     if not menu.evaluate("node => node.open"):
                         menu.locator("summary").click()
                     menu.get_by_role("button", name=name, exact=True).click()
@@ -68,6 +69,10 @@ def main():
                     page.locator(button_id).click()
                     page.locator(dialog_id).wait_for(state="hidden")
                     settle()
+
+                assert page.locator("#globalSettings > summary").inner_text() == "设置"
+                project_actions = page.locator(".project-actions .action-menu-list button").all_text_contents()
+                assert "人员维护" not in project_actions and "人员工号" not in project_actions and "周报接收群" not in project_actions
 
                 # Project routing is per project; cancel and clear are both supported.
                 menu_action("编辑")
@@ -102,14 +107,15 @@ def main():
 
                 # Existing owners appear once without changing any source records.
                 snapshot = Path(server.DATA_FILE).read_bytes()
-                menu_action("人员工号")
+                menu_action("人员维护")
+                assert page.locator("#peopleTitle").inner_text() == "人员维护"
                 assert page.locator("#peopleList .person-row").count() == 3
                 assert person_row("测试甲").locator('[name="name"]').get_attribute("readonly") is not None
                 assert person_row("Ocean").locator('[name="employee_id"]').input_value() == ""
                 page.locator("#peopleCancel").click()
                 settle()
                 assert Path(server.DATA_FILE).read_bytes() == snapshot
-                menu_action("人员工号")
+                menu_action("人员维护")
                 person_row("测试甲").locator('[name="employee_id"]').fill("00123")
                 page.locator("#addPersonBtn").click()
                 added = page.locator("#peopleList .person-row").last
@@ -120,8 +126,22 @@ def main():
                 assert person("测试丙")["employee_id"] == "00999"
                 assert server.read_data()["tasks"] == original_tasks
 
+                # One global directory is available from either tab, including saved employee IDs.
+                page.locator("#thingsTab").click()
+                menu_action("人员维护")
+                assert page.locator("#peopleList .person-row").count() == 4
+                assert person_row("测试甲").locator('[name="employee_id"]').input_value() == "00123"
+                assert person_row("测试丙").locator('[name="employee_id"]').input_value() == "00999"
+                page.locator("#peopleCancel").click()
+                settle()
+                menu_action("周报接收群")
+                assert page.locator("#weeklyReportGroupIds").input_value() == ""
+                page.locator("#weeklyReportGroupsCancel").click()
+                settle()
+                page.locator("#projectsTab").click()
+
                 # Slow/failed persistence locks controls, keeps the draft and permits retry.
-                menu_action("人员工号")
+                menu_action("人员维护")
                 person_row("测试甲").locator('[name="employee_id"]').fill("00456")
                 held = []
                 page.route("**/people/upsert", lambda route: held.append(route))
@@ -141,7 +161,7 @@ def main():
                 assert person("测试甲")["employee_id"] == "00456"
 
                 # A stale form must not overwrite an independently corrected employee number.
-                menu_action("人员工号")
+                menu_action("人员维护")
                 person_row("测试甲").locator('[name="employee_id"]').fill("00777")
                 response = context.request.post(url + "/people/upsert", data={"people": [{"name": "测试甲", "employee_id": "00888", "base_employee_id": "00456"}]})
                 assert response.ok, response.text()
@@ -153,7 +173,7 @@ def main():
                 page.locator("#peopleCancel").click()
                 settle()
                 page.reload()
-                menu_action("人员工号")
+                menu_action("人员维护")
                 assert person_row("测试甲").locator('[name="employee_id"]').input_value() == "00888"
                 person_row("测试甲").locator('[name="employee_id"]').fill("")
                 save("#peopleDialog", "#peopleSave")
@@ -187,20 +207,38 @@ def main():
                 page.locator("#weeklyReportGroupsCancel").click()
                 settle()
 
+                # The wider sidebar keeps project cards readable without overflowing the viewport.
+                for width, expected_sidebar in ((920, 220), (1013, 220), (1305, 260)):
+                    page.set_viewport_size({"width": width, "height": 774})
+                    sidebar = page.locator(".project-sidebar").bounding_box()
+                    assert abs(sidebar["width"] - expected_sidebar) <= 1, (width, sidebar)
+                    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), f"Page overflow at {width}px"
+                    assert page.locator("#projectList .project-item").evaluate_all("nodes => nodes.every(n => n.scrollWidth <= n.clientWidth + 1)"), f"Project card overflow at {width}px"
+                    menu_action("人员维护")
+                    assert page.locator("#peopleDialog").evaluate("n => n.scrollWidth <= n.clientWidth + 1"), f"Directory overflow at {width}px"
+                    page.locator("#peopleCancel").click()
+                    settle()
+
                 # Configuration stays accessible when no active projects exist.
                 for value in (project, other):
                     response = context.request.patch(url + "/projects/" + value["id"], data={"archived": True})
                     assert response.ok
                 page.reload()
+                assert page.locator("#projectList .project-item").count() == 0
                 for width in (775, 1013):
                     page.set_viewport_size({"width": width, "height": 774})
-                    for label, dialog_id, cancel in (("人员工号", "#peopleDialog", "#peopleCancel"), ("周报接收群", "#weeklyReportGroupsDialog", "#weeklyReportGroupsCancel")):
+                    for label, dialog_id, cancel in (("人员维护", "#peopleDialog", "#peopleCancel"), ("周报接收群", "#weeklyReportGroupsDialog", "#weeklyReportGroupsCancel")):
                         menu_action(label)
                         dialog = page.locator(dialog_id)
                         assert dialog.evaluate("n => n.scrollWidth <= n.clientWidth + 1"), f"Overflow in {dialog_id} at {width}px"
                         assert dialog.evaluate("n => [...n.querySelectorAll('input,textarea,label,h2')].every(x => getComputedStyle(x).fontStyle === 'normal')")
                         page.locator(cancel).click()
                         settle()
+                page.locator("#thingsTab").click()
+                menu_action("人员维护")
+                assert person_row("测试丙").locator('[name="employee_id"]').input_value() == "00999"
+                page.locator("#peopleCancel").click()
+                settle()
                 assert server.read_data()["tasks"] == original_tasks
                 assert not errors, errors
                 browser.close()

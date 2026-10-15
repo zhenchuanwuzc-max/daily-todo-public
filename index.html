@@ -752,11 +752,11 @@ body { min-width:900px; padding:16px 20px; }
 .inline-task.saving { opacity:.65; }
 .inline-task input[type=checkbox] { flex-shrink:0; accent-color:var(--accent); }
 .inline-task .drag-handle { width:18px; padding-left:0; padding-right:0; }
-#projectsView { display:grid; grid-template-columns:220px minmax(0,1fr); gap:28px; align-items:start; }
+#projectsView { display:grid; grid-template-columns:260px minmax(0,1fr); gap:28px; align-items:start; }
 .project-sidebar { position:sticky; top:20px; }
-.project-item { display:block; border:1px solid transparent; border-radius:7px; width:100%; padding:11px 10px; margin-bottom:4px; background:transparent; text-align:left; cursor:pointer; font:inherit; }
-.project-item strong { display:block; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.project-item small { display:block; margin-top:5px; color:var(--muted); font-size:11px; }
+.project-item { display:block; border:1px solid transparent; border-radius:7px; width:100%; min-height:72px; padding:14px; margin-bottom:6px; background:transparent; text-align:left; cursor:pointer; font:inherit; }
+.project-item strong { display:block; font-size:14px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.project-item small { display:block; margin-top:6px; color:var(--muted); font-size:12px; }
 .project-item[aria-current=true] { background:#eaf3f0; border-color:#d4e7e0; color:var(--accent); }
 .project-item:hover { background:var(--hover); }
 .project-add { width:100%; margin-top:6px; padding:10px; border:1px dashed var(--line); border-radius:7px; background:transparent; color:var(--accent); font:inherit; font-size:12px; text-align:left; cursor:pointer; }
@@ -789,7 +789,7 @@ button.milestone-title { cursor:pointer; }
 .action-menu > summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .action-menu .action-menu-list { position:absolute; top:calc(100% + 5px); right:0; z-index:50; min-width:150px; padding:5px; background:var(--surface); border:1px solid var(--line); border-radius:7px; box-shadow:0 6px 20px rgba(0,0,0,.08); }
 .action-menu.opens-up .action-menu-list { top:auto; bottom:calc(100% + 5px); }
-.action-menu .action-menu-list button { display:block; width:100%; border:0; border-radius:4px; background:transparent; padding:9px 10px; text-align:left; font-size:12px; }
+.action-menu .action-menu-list button { display:block; width:100%; border:0; border-radius:4px; background:transparent; color:var(--text-2); font-family:inherit; padding:9px 10px; text-align:left; font-size:12px; cursor:pointer; }
 .action-menu .action-menu-list button:hover:not(:disabled) { background:var(--hover); }
 .milestone-add { display:flex; align-items:center; gap:8px; padding:10px 2px; }
 .milestone-add input { padding:6px 5px; border:1px solid var(--line); border-radius:5px; background:var(--surface); font:inherit; font-size:12px; min-width:0; }
@@ -840,7 +840,7 @@ button.milestone-title { cursor:pointer; }
 #entityNotice { color:var(--muted); font-size:12px; line-height:1.6; margin-top:12px; }
 .dialog-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:24px; }
 .dialog-actions button { min-width:88px; min-height:42px; padding:9px 20px; font-size:14px; }
-@media(max-width:1150px) { .app-layout{grid-template-columns:105px minmax(0,1fr);gap:12px;} #projectsView{grid-template-columns:180px minmax(0,1fr);gap:16px;} .inline-task .association{flex-basis:104px;width:104px;} .inline-task .owner-input{width:56px;flex-basis:56px;} }
+@media(max-width:1150px) { .app-layout{grid-template-columns:105px minmax(0,1fr);gap:12px;} #projectsView{grid-template-columns:220px minmax(0,1fr);gap:16px;} .inline-task .association{flex-basis:104px;width:104px;} .inline-task .owner-input{width:56px;flex-basis:56px;} }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; transition:none !important; } }
 
 </style>
@@ -933,7 +933,7 @@ button.milestone-title { cursor:pointer; }
 </dialog>
 <dialog id="peopleDialog" aria-labelledby="peopleTitle">
   <form id="peopleForm">
-    <h2 id="peopleTitle">人员工号</h2>
+    <h2 id="peopleTitle">人员维护</h2>
     <div class="people-columns" aria-hidden="true"><span>姓名</span><span>工号（可稍后填写）</span></div>
     <div id="peopleList"></div>
     <button id="addPersonBtn" class="subtle-button" type="button">＋ 添加人员</button>
@@ -2486,6 +2486,9 @@ document.getElementById('weeklyReportGroupsForm').addEventListener('submit',asyn
   const ok=await saveFollowupConfig(form,'weeklyReportGroupsError','/weekly-report/groups',{group_ids,base_group_ids:weeklyReportGroupsBase},result=>{state.weekly_report_groups=result.weekly_report_groups;});
   if(ok)document.getElementById('weeklyReportGroupsDialog').close();
 });
+const globalSettings=settingsMenu('设置',[btn('人员维护',openPeople),btn('周报接收群',openWeeklyReportGroups)]);
+globalSettings.id='globalSettings';
+document.querySelector('.header-right').append(globalSettings);
 for(const [dialogId,formId,cancelId] of [['peopleDialog','peopleForm','peopleCancel'],['weeklyReportGroupsDialog','weeklyReportGroupsForm','weeklyReportGroupsCancel']]) {
   const dialog=document.getElementById(dialogId);
   document.getElementById(cancelId).addEventListener('click',()=>dialog.close());
@@ -2730,7 +2733,6 @@ function renderProjectDetail() {
     buttons.push(btn('添加里程碑',()=>openEntity('milestone',null,p)),btn('里程碑排序',()=>openMilestoneOrder(p)),btn('编辑',()=>openEntity('project',p)),btn('归档',()=>mutate('/projects/'+encodeURIComponent(p.id),'PATCH',{archived:true})),btn('删除',()=>{if(confirm('删除「'+p.name+'」？\n项目会隐藏，可在项目设置中恢复；事项仍保留在事情跟进中。'))mutate('/projects/'+encodeURIComponent(p.id),'DELETE');},'danger'));
   }
   if(state.projects.some(project=>project.archived||project.deleted_at))buttons.push(btn('恢复项目',openProjectRestore));
-  buttons.push(btn('人员工号',openPeople),btn('周报接收群',openWeeklyReportGroups));
   if(buttons.length)actions.append(settingsMenu('项目设置',buttons));
   heading.append(actions);root.append(heading);
   if(!p){root.append(el('div','project-empty','选择一个项目查看进展，或点击左侧「＋ 新增项目」。'));return;}
