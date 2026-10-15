@@ -677,6 +677,26 @@ body { min-width:900px; padding:16px 20px; }
 .inline-task.saving { opacity:.65; }
 .inline-task input[type=checkbox] { flex-shrink:0; accent-color:var(--accent); }
 .inline-task .drag-handle { width:18px; padding-left:0; padding-right:0; }
+#projectDetail .inline-task { min-height:44px; padding:6px 4px; gap:6px !important; font-size:13px; line-height:20px; }
+#projectDetail .inline-task .text { padding:5px 6px; font-size:13px; line-height:20px; }
+#projectDetail .inline-task input:not([type=checkbox]),#projectDetail .inline-task select { height:32px; padding:5px 4px; font-size:13px; line-height:20px; }
+#projectDetail .inline-task .owner-input { flex:0 0 80px; width:80px; }
+#projectDetail .inline-task .deadline-wrap { flex-basis:156px; }
+#projectDetail .inline-task .deadline-input { width:132px; }
+#projectDetail .inline-task .pri-select { width:48px; }
+#projectDetail .inline-task .row-delete { width:24px; height:32px; }
+#projectDetail .inline-task .owner-value { flex:0 0 100px; padding:5px 4px; color:var(--text-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#projectDetail .inline-task .deadline-value { width:132px; padding:5px 4px; color:var(--text-2); font-variant-numeric:tabular-nums; white-space:nowrap; }
+#projectDetail .inline-task .deadline-value.empty { color:var(--muted); }
+#projectDetail .inline-task .overdue .deadline-value { color:#b42318; }
+#projectDetail .inline-task .due-today .deadline-value { color:var(--accent); }
+#projectDetail .inline-task .priority-value { flex:0 0 48px; color:var(--text-2); text-align:center; }
+.project-actions .project-edit-toggle[aria-pressed=true] { color:var(--accent); background:#eaf3f0; border-color:#b5d6ce; }
+.person-picker { position:relative; display:flex; align-items:center; min-width:0; }
+.person-picker .person-picker-toggle { position:absolute; right:1px; top:1px; width:24px; padding:0; border:0; border-radius:4px; background:transparent; color:var(--text-2); font:inherit; text-align:center; appearance:none; -webkit-appearance:none; cursor:pointer; }
+#projectDetail .inline-task .person-picker { flex:0 0 100px; width:100px; }
+#projectDetail .inline-task .person-picker .owner-input { flex:1; width:100%; padding-right:25px; }
+#projectDetail .inline-task .person-picker-toggle { height:30px; padding:0; font-size:13px; }
 #projectsView { display:grid; grid-template-columns:260px minmax(0,1fr); gap:28px; align-items:start; }
 .project-sidebar { position:sticky; top:20px; }
 .project-item { display:block; border:1px solid transparent; border-radius:7px; width:100%; min-height:72px; padding:14px; margin-bottom:6px; background:transparent; text-align:left; cursor:pointer; font:inherit; }
@@ -717,11 +737,13 @@ button.milestone-title { cursor:pointer; }
 .action-menu .action-menu-list button { display:block; width:100%; border:0; border-radius:4px; background:transparent; color:var(--text-2); font-family:inherit; padding:9px 10px; text-align:left; font-size:12px; cursor:pointer; }
 .action-menu .action-menu-list button:hover:not(:disabled) { background:var(--hover); }
 .milestone-add { display:flex; align-items:center; gap:8px; padding:10px 2px; }
-.milestone-add input { padding:6px 5px; border:1px solid var(--line); border-radius:5px; background:var(--surface); font:inherit; font-size:12px; min-width:0; }
+.milestone-add input { min-height:40px; padding:9px 10px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--text); font:inherit; font-size:14px; line-height:20px; min-width:0; }
 .milestone-add input[name=text] { flex:1; }
-.milestone-add input[name=owner] { width:72px; }
-.milestone-add input[name=deadline] { width:132px; }
-.milestone-add button { flex-shrink:0; }
+.milestone-add .person-picker { flex:0 0 112px; width:112px; }
+.milestone-add input[name=owner] { width:100%; padding-right:27px; }
+.milestone-add .person-picker-toggle { height:38px; }
+.milestone-add input[name=deadline] { width:148px; font-size:13px; }
+.milestone-add button { flex-shrink:0; min-height:40px; padding:9px 14px; font-size:13px; }
 .milestone.empty .milestone-meta { color:#a46b18; }
 .project-empty { padding:64px 18px; color:var(--muted); text-align:center; line-height:1.9; }
 .project-hint { color:var(--muted); font-size:12px; padding:8px 0; }
@@ -1953,6 +1975,7 @@ let renderPending = false;
 let activeTab = localStorage.getItem('tracking-tab') === 'projects' ? 'projects' : 'things';
 let selectedProject = localStorage.getItem('tracking-project') || '';
 let showCompletedProjectItems = localStorage.getItem('tracking-show-completed') === 'true';
+let projectEditMode = false;
 let dialogContext = null;
 let milestoneOrderProjectId = '';
 let peopleBase = new Map();
@@ -2165,7 +2188,8 @@ function rowField(t, field, tag, type, fallback) {
   });
   return n;
 }
-function renderTask(t) {
+function renderTask(t, {projectView=false}={}) {
+  const editable=!projectView||projectEditMode;
   const li = el('li','inline-task' + (t.done?' done':'') + (t.auto_skipped?' auto-skipped':''));
   li.dataset.id=t.id;
   let lead;
@@ -2179,31 +2203,41 @@ function renderTask(t) {
       if(!ok) {lead.checked=!!t.done;li.classList.toggle('done',!!t.done);}
     });
   }
-  const text=rowField(t,'text','div');
+  const text=editable?rowField(t,'text','div'):el('span','text',t.text);
   text.title=[t.note,t.tag?('分类：'+t.tag):'',t.auto_skipped?'自动跳过，未实际完成':'',t.created?('添加：'+fmtFull(t.created)):'',t.done_at?('完成：'+fmtFull(t.done_at)):''].filter(Boolean).join('\n');
-  const owner=rowField(t,'owner','input','text','Ocean');owner.setAttribute('list','peopleOptions');
+  const owner=editable?rowField(t,'owner','input','text','Ocean'):el('span','owner-value',t.owner||'Ocean');
+  if(!projectView)owner.setAttribute('list','peopleOptions');
+  else owner.autocomplete='off';
   const dateWrap=el('span','deadline-wrap');
-  const deadline=rowField(t,'deadline','input','date');
-  dateWrap.classList.toggle('empty-date',!deadline.value);
-  const dateStatus=!t.done && deadline.value ? (deadline.value<todayStr()?'逾期':deadline.value===todayStr()?'今日到期':'截止日期') : '截止日期';
-  deadline.title=dateStatus + (deadline.value?' · '+deadline.value:' · 未设截止');
+  const deadline=editable?rowField(t,'deadline','input','date'):el('span','deadline-value'+(t.deadline?'':' empty'),t.deadline?.replaceAll('-','/')||'未设截止');
+  const deadlineValue=editable?deadline.value:t.deadline||'';
+  dateWrap.classList.toggle('empty-date',editable&&!deadlineValue);
+  const dateStatus=!t.done && deadlineValue ? (deadlineValue<todayStr()?'逾期':deadlineValue===todayStr()?'今日到期':'截止日期') : '截止日期';
+  deadline.title=dateStatus + (deadlineValue?' · '+deadlineValue:' · 未设截止');
   dateWrap.classList.toggle('overdue',dateStatus==='逾期');dateWrap.classList.toggle('due-today',dateStatus==='今日到期');
   dateWrap.appendChild(deadline);
   if(dateStatus==='逾期'||dateStatus==='今日到期')dateWrap.append(el('span','date-status',dateStatus==='今日到期'?'今日':dateStatus));
-  const association=el('select','association');association.setAttribute('aria-label','所属项目和里程碑');
-  fillAssociation(association,associationValue(t));
-  association.disabled=!!(t.recurring||t.recur_source||t.auto_skipped);
-  if(association.disabled) association.title='重复任务暂不关联项目';
-  association.addEventListener('change',async()=>{
-    const value=association.value;
-    if(!await patchTask(t.id,associationPatch(value))) {association.value=associationValue(t);}
-    association.blur();
-  });
-  const pri=el('select','pri-select');pri.setAttribute('aria-label','优先级');pri.title='优先级';
-  for(const v of ['P0','P1','P2','']) {const o=el('option','',v||'—');o.value=v;pri.appendChild(o);}
-  pri.value=visiblePriority(t)||'';pri.addEventListener('change',async()=>{if(!await setPriority(t.id,pri.value||null))pri.value=visiblePriority(t)||'';pri.blur();});
-  const del=btn(t.source==='claude-suggest'?'拒绝':'×',()=>deleteTask(t.id),'row-delete');del.title='删除事项';del.setAttribute('aria-label','删除事项：'+t.text);
-  li.append(lead,text,owner,dateWrap,association,pri,del);
+  let association;
+  if(!projectView) {
+    association=el('select','association');association.setAttribute('aria-label','所属项目和里程碑');
+    fillAssociation(association,associationValue(t));
+    association.disabled=!!(t.recurring||t.recur_source||t.auto_skipped);
+    if(association.disabled) association.title='重复任务暂不关联项目';
+    association.addEventListener('change',async()=>{
+      const value=association.value;
+      if(!await patchTask(t.id,associationPatch(value))) {association.value=associationValue(t);}
+      association.blur();
+    });
+  }
+  const pri=editable?el('select','pri-select'):el('span','priority-value',visiblePriority(t)||'—');pri.setAttribute('aria-label','优先级');pri.title='优先级';
+  if(editable) {
+    for(const v of ['P0','P1','P2','']) {const o=el('option','',v||'—');o.value=v;pri.appendChild(o);}
+    pri.value=visiblePriority(t)||'';pri.addEventListener('change',async()=>{if(!await setPriority(t.id,pri.value||null))pri.value=visiblePriority(t)||'';pri.blur();});
+  }
+  li.append(lead,text,projectView&&editable?personPicker(owner,true):owner,dateWrap,...(association?[association]:[]),pri);
+  if(editable) {
+    const del=btn(t.source==='claude-suggest'?'拒绝':'×',()=>deleteTask(t.id),'row-delete');del.title='删除事项';del.setAttribute('aria-label','删除事项：'+t.text);li.append(del);
+  }
   return li;
 }
 
@@ -2297,6 +2331,22 @@ function knownPeople() {
   }
   if(!people.size)people.set(personKey('Ocean'),{name:'Ocean',employee_id:''});
   return [...people.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-CN'));
+}
+function personPicker(input, commitOnSelect=false) {
+  const wrap=el('span','person-picker');
+  const select=el('select','person-picker-toggle');
+  select.setAttribute('aria-label','从人员名单选择负责人');select.title='选择已有人员，也可直接输入姓名';
+  const prompt=el('option','','⌄');prompt.value='';prompt.disabled=true;prompt.hidden=true;select.append(prompt);
+  for(const person of knownPeople()) {const option=el('option','',person.name);option.value=person.name;select.append(option);}
+  select.value='';
+  select.addEventListener('change',()=>{
+    const name=select.value;if(!name)return;
+    input.value=name;select.value='';
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+    input.focus();if(commitOnSelect)input.blur();
+  });
+  wrap.append(input,select);return wrap;
 }
 function renderPeopleOptions() {
   const list=document.getElementById('peopleOptions');list.replaceChildren();
@@ -2552,11 +2602,11 @@ document.getElementById('entityForm').addEventListener('submit',async e=>{
 function milestoneAddForm(p,m) {
   const key=p.id+':'+(m?.id||'unscheduled');
   const form=el('form','milestone-add');form.dataset.milestoneId=m?.id||'';
-  const draft=addDrafts.get(key)||{text:'',owner:'Ocean',deadline:''};
+  const draft=addDrafts.get(key)||{text:'',owner:'Ocean',deadline:m?.due||''};
   for(const [name,type,placeholder] of [['text','text','＋ 添加事项'],['owner','text','负责人'],['deadline','date','截止日期']]) {
     const input=el('input');input.name=name;input.type=type;input.placeholder=placeholder;input.value=draft[name];input.required=true;input.setAttribute('aria-label',name==='text'?'事项名称':placeholder);
-    if(name==='owner')input.setAttribute('list','peopleOptions');
-    input.addEventListener('input',()=>{addDrafts.set(key,{text:form.elements.text.value,owner:form.elements.owner.value,deadline:form.elements.deadline.value});});form.appendChild(input);
+    if(name==='owner')input.autocomplete='off';
+    input.addEventListener('input',()=>{addDrafts.set(key,{text:form.elements.text.value,owner:form.elements.owner.value,deadline:form.elements.deadline.value});});form.appendChild(name==='owner'?personPicker(input):input);
   }
   const add=el('button','subtle-button','添加');add.type='submit';form.appendChild(add);
   form.addEventListener('submit',async e=>{
@@ -2564,7 +2614,7 @@ function milestoneAddForm(p,m) {
     if(!payload.text||!payload.owner||!payload.deadline){status('请填写事项、负责人和截止日期',true);return;}
     add.disabled=true;
     const ok=await mutate('/todos/add','POST',payload,()=>{
-      if(form.elements.text.value.trim()===payload.text&&form.elements.owner.value.trim()===payload.owner&&form.elements.deadline.value===payload.deadline){addDrafts.delete(key);form.reset();form.elements.owner.value='Ocean';}
+      if(form.elements.text.value.trim()===payload.text&&form.elements.owner.value.trim()===payload.owner&&form.elements.deadline.value===payload.deadline){addDrafts.delete(key);form.reset();form.elements.owner.value='Ocean';form.elements.deadline.value=milestoneById(m?.id)?.due||'';}
     });
     add.disabled=false;
     if(ok){requestRender();}
@@ -2578,15 +2628,15 @@ function renderMilestone(p,m) {
   if(complete&&!showCompletedProjectItems)return null;
   const section=el('section','milestone'+(!tasks.length?' empty':''));if(m)section.dataset.milestoneId=m.id;
   const header=el('div','milestone-head');
-  const heading=m&&!p.deleted_at?btn(m.name,()=>openEntity('milestone',m,p),'milestone-title'):el('span','milestone-title',m?.name||'待安排');
-  if(m&&!p.deleted_at)heading.title='点击编辑里程碑';
+  const heading=m&&!p.deleted_at&&projectEditMode?btn(m.name,()=>openEntity('milestone',m,p),'milestone-title'):el('span','milestone-title',m?.name||'待安排');
+  if(m&&!p.deleted_at&&projectEditMode)heading.title='点击编辑里程碑';
   header.append(heading);
   const metaText=[m?.owner||p.owner||'Ocean',m?.due||'',tasks.length?`${tasks.filter(t=>t.done).length}/${tasks.length} 完成`:''].filter(Boolean).join(' · ');
   header.append(el('span','milestone-meta',metaText));
   section.append(header);
   const body=el('div');
-  const ul=el('ul');for(const t of tasks)if(showCompletedProjectItems||!t.done)ul.append(renderTask(t));body.append(ul);
-  if(!p.deleted_at)body.append(milestoneAddForm(p,m));
+  const ul=el('ul');for(const t of tasks)if(showCompletedProjectItems||!t.done)ul.append(renderTask(t,{projectView:true}));body.append(ul);
+  if(!p.deleted_at&&projectEditMode)body.append(milestoneAddForm(p,m));
   section.append(body);return section;
 }
 function renderProjectDetail() {
@@ -2597,6 +2647,11 @@ function renderProjectDetail() {
   const actions=el('div','project-actions');
   const buttons=[];
   if(p&&!p.deleted_at) {
+    const editToggle=btn(projectEditMode?'完成编辑':'编辑',()=>{
+      projectEditMode=!projectEditMode;requestRender();
+      document.getElementById('projectEditToggle')?.focus({preventScroll:true});
+    },'project-edit-toggle');
+    editToggle.id='projectEditToggle';editToggle.setAttribute('aria-pressed',String(projectEditMode));actions.append(editToggle);
     const completedLabel=el('label','completed-visibility');
     const completed=el('input');completed.type='checkbox';completed.id='showCompletedProjectItems';completed.checked=showCompletedProjectItems;
     completed.title='显示已完成的事项和里程碑';

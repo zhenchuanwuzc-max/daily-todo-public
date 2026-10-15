@@ -57,6 +57,18 @@ def main():
                 page.evaluate("document.activeElement?.blur()")
                 page.wait_for_function("mutationCount === 0 && !renderPending")
 
+            def ensure_project_edit():
+                toggle = page.locator("#projectEditToggle")
+                if toggle.inner_text().strip() == "编辑":
+                    toggle.click()
+                    settle()
+                assert toggle.inner_text().strip() == "完成编辑"
+
+            def assert_project_view():
+                assert page.locator("#projectEditToggle").inner_text().strip() == "编辑"
+                assert page.locator("#projectDetail .milestone-add").count() == 0
+                assert page.locator("#projectDetail .inline-task input:not([type=checkbox]), #projectDetail .inline-task select, #projectDetail .inline-task [contenteditable=true], #projectDetail .inline-task .row-delete").count() == 0
+
             def assert_compact_sticky_heading():
                 title = page.locator("#projectDetail .project-heading h2")
                 assert title.count() == 1
@@ -165,6 +177,8 @@ def main():
             assert page.locator(".project-progress").count() == 0, "An empty project must not show an empty progress card"
             assert page.locator("#coreSummary").is_hidden(), "Project tab must not repeat the core summary"
             assert page.locator('.milestone:not([data-milestone-id])').count() == 1
+            assert_project_view()
+            ensure_project_edit()
             assert_menu_dismissal(".project-actions")
             page.locator("#thingsTab").click()
             assert page.locator("#coreSummary").is_visible()
@@ -190,23 +204,105 @@ def main():
             page.locator("#entityDialog").get_by_role("button", name="取消", exact=True).click()
             settle()
 
+            # New rows inherit only the milestone's current date; an undated milestone stays blank.
+            first_form = page.locator(f'form.milestone-add[data-milestone-id="{first}"]')
+            second_form = page.locator(f'form.milestone-add[data-milestone-id="{second}"]')
+            assert first_form.locator('[name=deadline]').input_value() == ""
+            assert second_form.locator('[name=deadline]').input_value() == ""
+            assert first_form.locator('[name=owner]').get_attribute("list") is None
+            add_control_sizes = first_form.locator("input,button").evaluate_all("nodes => nodes.map(node => ({name:node.name || node.textContent, height:node.getBoundingClientRect().height, minHeight:getComputedStyle(node).minHeight, display:getComputedStyle(node).display}))")
+            assert all(control["height"] >= 40 for control in add_control_sizes), add_control_sizes
+            response = context.request.patch(url + "/milestones/" + first, data={"due": today})
+            assert response.ok, response.text()
+            page.evaluate("readState(true)")
+            settle()
+            assert first_form.locator('[name=deadline]').input_value() == today
+            # The explicit picker offers the shared directory even while Ocean is prefilled.
+            picker = first_form.locator("select.person-picker-toggle")
+            assert "项目负责人" in picker.locator("option").evaluate_all("nodes => nodes.map(node => node.value)")
+            picker.select_option("项目负责人")
+            assert first_form.locator('[name=owner]').input_value() == "项目负责人"
+            assert picker.input_value() == ""
+            first_form.locator('[name=owner]').fill("Ocean")
+
             def add_in_milestone(mid, text, owner="Ocean", deadline=today):
+                ensure_project_edit()
                 form = page.locator(f'form.milestone-add[data-milestone-id="{mid}"]')
                 assert form.locator('[name=owner]').input_value() == "Ocean"
+                assert form.locator('[name=owner]').get_attribute("list") is None
                 form.locator('[name=text]').fill(text)
                 form.locator('[name=owner]').fill(owner)
-                form.locator('[name=deadline]').fill(deadline)
+                if deadline is not None:
+                    form.locator('[name=deadline]').fill(deadline)
                 form.get_by_role("button", name="添加", exact=True).click()
                 settle()
                 return task_named(text)
 
-            first_task = add_in_milestone(first, "核对方案并完成评审", "张三")
+            first_task = add_in_milestone(first, "核对方案并完成评审", "张三", deadline=None)
+            assert first_task["deadline"] == today
+            assert first_form.locator('[name=deadline]').input_value() == today, "A successful add must restore the milestone date"
             second_task = add_in_milestone(first, "完成交互验收", deadline="2099-12-31")
+            assert second_task["deadline"] == "2099-12-31"
+            assert first_form.locator('[name=deadline]').input_value() == today, "A manual override must not become the next row's default"
             later_task = add_in_milestone(second, "发布前检查", deadline="2099-12-31")
+            assert second_form.locator('[name=deadline]').input_value() == "", "An undated milestone must reset to an empty date"
             assert first_task["project_id"] == project_id and first_task["milestone_id"] == first
             assert "0/2 完成" in page.locator(f'section[data-milestone-id="{first}"]').inner_text()
             assert page.locator(".project-progress").count() == 1
             assert page.locator("#coreSummary").is_hidden()
+            assert page.locator("#projectDetail .association").count() == 0
+            assert page.locator('#projectDetail [data-field=owner][list]').count() == 0
+            later_row = page.locator(f'#projectDetail [data-id="{later_task["id"]}"]')
+            later_row.locator("select.person-picker-toggle").select_option("张三")
+            settle()
+            assert task_named(later_task["text"])["owner"] == "张三"
+            arbitrary_owner = later_row.locator('[data-field=owner]')
+            arbitrary_owner.fill("直接输入的新同事")
+            arbitrary_owner.press("Enter")
+            settle()
+            assert task_named(later_task["text"])["owner"] == "直接输入的新同事"
+
+            # A later milestone change cannot overwrite a manually entered draft or existing tasks.
+            first_form.locator('[name=text]').fill("尚未保存的新增草稿")
+            first_form.locator('[name=owner]').fill("手写草稿负责人")
+            first_form.locator('[name=deadline]').fill("2099-12-20")
+            page.locator("#projectEditToggle").click()
+            settle()
+            assert_project_view()
+            ensure_project_edit()
+            assert first_form.locator('[name=text]').input_value() == "尚未保存的新增草稿"
+            assert first_form.locator('[name=owner]').input_value() == "手写草稿负责人"
+            assert first_form.locator('[name=deadline]').input_value() == "2099-12-20"
+            response = context.request.patch(url + "/milestones/" + first, data={"due": "2099-12-22"})
+            assert response.ok, response.text()
+            page.evaluate("readState(true)")
+            settle()
+            page.evaluate("readState(true)")
+            assert first_form.locator('[name=text]').input_value() == "尚未保存的新增草稿"
+            assert first_form.locator('[name=owner]').input_value() == "手写草稿负责人"
+            assert first_form.locator('[name=deadline]').input_value() == "2099-12-20"
+            assert task_named(first_task["text"])["deadline"] == today
+            assert task_named(second_task["text"])["deadline"] == "2099-12-31"
+            # Reload deliberately discards this unsaved test draft and uses the new milestone default.
+            page.reload()
+            page.locator("#projectDetail .project-heading").wait_for()
+            assert_project_view()
+            page.locator(f'section[data-milestone-id="{first}"] .milestone-title').click()
+            assert page.locator("#entityDialog").is_hidden(), "A view-mode milestone title must not enter editing"
+            view_checkbox = page.locator(f'#projectDetail [data-id="{first_task["id"]}"] input[type=checkbox]')
+            view_checkbox.check()
+            settle()
+            assert task_named(first_task["text"])["done"] is True
+            assert page.locator(f'#projectDetail [data-id="{first_task["id"]}"]').count() == 0
+            page.locator("#showCompletedProjectItems").check()
+            view_checkbox.uncheck()
+            settle()
+            page.locator("#showCompletedProjectItems").uncheck()
+            assert task_named(first_task["text"])["done"] is False
+            assert_project_view()
+            ensure_project_edit()
+            assert first_form.locator('[name=deadline]').input_value() == "2099-12-22"
+            assert second_form.locator('[name=deadline]').input_value() == ""
 
             # Same item in both views; deadline is not a scheduled start date.
             page.locator("#thingsTab").click()
@@ -372,13 +468,18 @@ def main():
             assert page.locator('.milestone:not([data-milestone-id])').count() == 1, "Deleting a populated milestone must restore the pending area"
             assert "待安排" in page.locator('.milestone:not([data-milestone-id]) .milestone-title').inner_text()
             assert page.locator(f'.milestone:not([data-milestone-id]) [data-id="{first_task["id"]}"]').count() == 1
-            page.locator(f'#projectDetail [data-id="{first_task["id"]}"] .association').select_option(json.dumps([project_id, second], separators=(",", ":")))
+            assert page.locator("#projectDetail .association").count() == 0
+            page.locator("#thingsTab").click()
+            page.locator(f'#groups [data-id="{first_task["id"]}"] .association').select_option(json.dumps([project_id, second], separators=(",", ":")))
             settle()
-            page.locator("#showCompletedProjectItems").check()
-            deleted_milestone_association = page.locator(f'#projectDetail [data-id="{second_task["id"]}"] .association')
+            if page.locator("#group-DN").evaluate("node => node.classList.contains('collapsed')"):
+                page.locator("#group-DN .group-head").click()
+            deleted_milestone_association = page.locator(f'#groups [data-id="{second_task["id"]}"] .association')
             assert deleted_milestone_association.input_value().startswith("retained:")
             deleted_milestone_association.select_option(json.dumps([project_id, None], separators=(",", ":")))
             settle()
+            page.locator("#projectsTab").click()
+            page.locator("#showCompletedProjectItems").check()
             page.locator(".deleted-milestones summary").click()
             page.locator(".deleted-milestone").get_by_role("button", name="恢复", exact=True).click()
             settle()
@@ -489,11 +590,11 @@ def main():
             settle()
 
             # Minimum native window width, both views; refresh persistence.
-            for width in (1100, 1013, 920):
+            for width in (775, 920, 1013, 1100, 1305):
                 page.set_viewport_size({"width": width, "height": 850})
                 for tab in ("things", "projects"):
                     page.locator(f"#{tab}Tab").click()
-                    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"{tab} overflow at {width}"
+                    assert page.evaluate("document.documentElement.scrollWidth <= Math.max(innerWidth, 900)"), f"{tab} exceeds the existing minimum-width layout at {width}"
                     if tab == "things":
                         fields = [page.locator(selector).bounding_box() for selector in ('#newText', '#newOwner', '#newDeadline')]
                         assert all(fields), "Common add fields must remain visible"
@@ -501,9 +602,21 @@ def main():
                             overlap_x = min(left['x'] + left['width'], right['x'] + right['width']) - max(left['x'], right['x'])
                             overlap_y = min(left['y'] + left['height'], right['y'] + right['height']) - max(left['y'], right['y'])
                             assert overlap_x <= 0 or overlap_y <= 0, f"Common fields overlap at {width}px"
+                    else:
+                        assert page.locator("#projectDetail .association").count() == 0
+                        assert page.locator("#projectDetail .milestone-add").evaluate_all("nodes => nodes.every(node => node.scrollWidth <= node.clientWidth + 1)"), f"Milestone add form overflow at {width}px"
+                    if width in (775, 1013, 1305):
+                        page.screenshot(path=str(output / f"milestone-entry-{tab}-{engine}-{width}.png"), full_page=True)
+                        if tab == "projects":
+                            page.locator("#projectEditToggle").click()
+                            settle()
+                            assert_project_view()
+                            page.screenshot(path=str(output / f"milestone-view-projects-{engine}-{width}.png"), full_page=True)
+                            ensure_project_edit()
             page.set_viewport_size({"width": 1100, "height": 850})
             page.reload()
             page.locator("#projectDetail .project-heading").wait_for()
+            assert_project_view()
             assert page.locator("#showCompletedProjectItems").is_checked(), "Show-completed choice must survive refresh"
             assert page.locator(".milestone-toggle").count() == 0
             assert "体验优化项目已修改" in page.locator('.project-item[aria-current="true"] strong').inner_text()
@@ -564,7 +677,7 @@ def main():
             assert page.locator('#groups [data-id="midnight-done"]').count() == 0
             assert page.locator('#groups [data-id="midnight-due"] .date-status').inner_text() == "逾期"
             assert not errors, errors
-            print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/sidebar creation, dedicated milestone-order dialog/boundaries/hidden completed records/pending+failure retry, milestone title editing/show-completed filtering+preference/no toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 920/1013px layout, persistence; no JS errors")
+            print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/sidebar creation, dedicated milestone-order dialog/boundaries/hidden completed records/pending+failure retry, milestone title editing/show-completed filtering+preference/no toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, default project view/check-uncheck/edit-mode draft preservation, milestone default deadline/manual override/draft preservation/no retroactive changes, shared owner picker plus free input/no project association control, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore through Things tab, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 775/920/1013/1100/1305px layout, persistence; no JS errors")
             browser.close()
         httpd.shutdown()
 
