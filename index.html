@@ -2261,9 +2261,24 @@ function renderProjectList() {
     const progress=projectProgress(p);
     const b=btn('',()=>{selectedProject=p.id;localStorage.setItem('tracking-project',p.id);renderProjectList();renderProjectDetail();},'project-item');
     b.dataset.projectId=p.id;b.setAttribute('aria-current',String(p.id===selectedProject));
+    bindProjectContextEdit(b,p.id);
     b.append(el('strong','',(p.core?'★ ':'')+p.name),el('small','',(p.owner||'Ocean')+(progress.tasks.length?` · ${progress.done}/${progress.tasks.length} 项完成`:'')));root.appendChild(b);
   }
   if(!ps.length)root.append(el('p','project-hint','暂无进行中的项目'));
+}
+
+function bindProjectContextEdit(node, projectId) {
+  node.title='右键编辑项目';
+  const edit=e=>{
+    const project=projectById(projectId);
+    if(!project||project.deleted_at)return;
+    e.preventDefault();e.stopPropagation();
+    openEntity('project',project);
+  };
+  node.addEventListener('contextmenu',edit);
+  node.addEventListener('keydown',e=>{
+    if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10'))edit(e);
+  });
 }
 
 document.getElementById('newProjectBtn').addEventListener('click',()=>openEntity('project'));
@@ -2578,7 +2593,7 @@ function renderProjectDetail() {
   const root=document.getElementById('projectDetail');root.replaceChildren();
   const p=projectById(selectedProject);
   const heading=el('div','project-heading');const title=el('div');
-  if(p){const name=el('h2','',p.name);name.title=p.name;title.append(name);}heading.append(title);
+  if(p){const name=el('h2','',p.name);name.title=p.name+' · 右键编辑项目';title.append(name);bindProjectContextEdit(title,p.id);}heading.append(title);
   const actions=el('div','project-actions');
   const buttons=[];
   if(p&&!p.deleted_at) {
