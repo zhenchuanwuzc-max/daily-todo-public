@@ -707,12 +707,19 @@ body { min-width:900px; padding:16px 20px; }
 .save-status { position:fixed; right:20px; bottom:16px; z-index:60; max-width:calc(100vw - 40px); padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:var(--surface); font-size:12px; color:var(--muted); }
 .save-status:empty { display:none; }
 .save-status.error { color:#b42318; }
-.core-summary { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+.core-summary { margin-bottom:12px; }
 .core-summary:empty { display:none; }
 .app-footer { display:flex; justify-content:center; gap:12px; flex-wrap:wrap; }
-.core-summary button { border:1px solid #d4e7e0; background:#f1f7f4; border-radius:8px; padding:9px 12px; cursor:pointer; text-align:left; font:inherit; color:var(--text-2); font-size:12px; }
-.core-summary b { color:var(--accent); margin-right:8px; }
-.core-summary .overdue-text { color:#b42318; margin-left:8px; }
+.core-summary-title { color:var(--text-2); font-size:12px; margin-bottom:6px; }
+.core-summary-title span { color:var(--muted); margin-left:8px; font-size:11px; }
+.core-summary-cards { display:flex; gap:8px; flex-wrap:wrap; }
+.core-summary button { border:1px solid #d4e7e0; background:#f1f7f4; border-radius:8px; padding:8px 12px; cursor:pointer; text-align:left; font:inherit; color:var(--text-2); font-size:12px; max-width:100%; }
+.core-summary b { color:var(--accent); }
+.core-summary-line { display:flex; gap:6px 14px; flex-wrap:wrap; align-items:baseline; line-height:1.7; }
+.core-summary .overdue-text { color:#b42318; }
+.milestone-section-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:6px; }
+.milestone-section-heading strong { font-size:14px; }
+.milestone-section-heading p { color:var(--muted); font-size:11px; line-height:1.6; margin-top:4px; }
 .add input { font:inherit; color:var(--text); background:transparent; border:0; outline:0; min-width:0; padding:5px 2px; }
 .add #newText { flex:1; min-width:150px; }
 .add .owner-input { flex:0 0 75px; width:75px; }
@@ -829,7 +836,7 @@ button:disabled { cursor:default; opacity:.5; }
     <input id="newText" type="text" placeholder="添加一件事…" aria-label="事项名称" required autocomplete="off">
     <input id="newOwner" class="owner-input" value="Ocean" placeholder="负责人" aria-label="负责人" required>
     <input id="newDeadline" class="deadline-input" type="date" aria-label="截止日期" title="截止日期（必填）" required>
-    <select id="newPri" title="优先级"><option>P0</option><option selected>P1</option><option>P2</option><option>P3</option></select>
+    <select id="newPri" title="优先级"><option>P0</option><option selected>P1</option><option>P2</option></select>
     <select id="newTag" title="分类"><option>work</option><option>startup</option><option>personal</option></select>
     <select id="newAssociation" class="association" aria-label="所属项目和里程碑"><option value="">不关联项目</option></select>
     <button id="addBtn" type="submit">添加</button>
@@ -960,7 +967,6 @@ function renderPriorityNav(buckets) {
     ["P0", "P0 紧急", buckets.P0.length, "var(--p0)"],
     ["P1", "P1 重要", buckets.P1.length, "var(--p1)"],
     ["P2", "P2 一般", buckets.P2.length, "var(--p2)"],
-    ["P3", "P3 后续", buckets.P3.length, "var(--p3)"],
   ];
   if (buckets.PN.length) entries.push(["PN", "未分类", buckets.PN.length, "var(--pn)"]);
   if (buckets.suggest.length) entries.unshift(["SG", "待采纳", buckets.suggest.length, "var(--accent)"]);
@@ -1140,10 +1146,12 @@ function placeDraggedTask(y) {
   }
 }
 
-const PRI_ORDER = ["P0", "P1", "P2", "P3"];
+const PRI_ORDER = ["P0", "P1", "P2"];
 const PRI_LABEL = {
-  P0: "紧急", P1: "重要", P2: "一般", P3: "后续"
+  P0: "紧急", P1: "重要", P2: "一般"
 };
+// Retired P3 records remain unchanged in storage and appear under 一般.
+function visiblePriority(task) { return task.priority === 'P3' ? 'P2' : task.priority; }
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 // UTC/offset timestamps are displayed in Beijing; legacy naive timestamps already mean Beijing.
@@ -1217,7 +1225,7 @@ function renderGroup(key, label, labelCn, tasks, collapsible = false) {
   const ul = document.createElement("ul");
   tasks.forEach(t => {
     const row = renderTask(t);
-    if (["P0", "P1", "P2", "P3", "PN"].includes(key)) addDragHandle(row);
+    if (["P0", "P1", "P2", "PN"].includes(key)) addDragHandle(row);
     ul.appendChild(row);
   });
   g.append(head, ul);
@@ -1238,17 +1246,17 @@ function render() {
 
   // 分桶：未来项（due > 今天）单独走 future，不进主列表
   // 重复任务种子 = 模板，不在主列表显示，只在「重复任务」区块管理
-  const buckets = { suggest: [], P0: [], P1: [], P2: [], P3: [], PN: [], done: [], future: [] };
+  const buckets = { suggest: [], P0: [], P1: [], P2: [], PN: [], done: [], future: [] };
   for (const t of state.tasks) {
     if (t.deleted_at) continue;
     if (isRecurringSeed(t)) continue;
     if (t.done) { if (t.done_at && localDateKey(t.done_at) === today) buckets.done.push(t); continue; }
     if (t.source === "claude-suggest") { buckets.suggest.push(t); continue; }  // Claude 建议隔离区，待 Ocean 审
     if (t.due && t.due > today) { buckets.future.push(t); continue; }
-    if (PRI_ORDER.includes(t.priority)) buckets[t.priority].push(t);
+    if (PRI_ORDER.includes(visiblePriority(t))) buckets[visiblePriority(t)].push(t);
     else buckets.PN.push(t);
   }
-  for (const k of ["P0","P1","P2","P3","PN"]) {
+  for (const k of ["P0","P1","P2","PN"]) {
     buckets[k].sort(compareTaskOrder);
   }
   buckets.suggest.sort((a, b) => timestampValue(b.created) - timestampValue(a.created));
@@ -1271,7 +1279,7 @@ function render() {
     if (g) root.appendChild(g);
   }
 
-  const nOpen = buckets.P0.length + buckets.P1.length + buckets.P2.length + buckets.P3.length + buckets.PN.length;
+  const nOpen = buckets.P0.length + buckets.P1.length + buckets.P2.length + buckets.PN.length;
   document.getElementById("meta").textContent =
     "更新 " + (state.updated || "—").replace("T", " ").slice(0, 16);
 
@@ -1550,7 +1558,8 @@ function renderReview() {
     } else {
       const lis = tasks.map(t => {
         const time = localTime(t.done_at);
-        const pri = t.priority ? `<span class="task-pri ${escapeHtml(t.priority)}">${escapeHtml(t.priority)}</span>` : "";
+        const priority = visiblePriority(t);
+        const pri = priority ? `<span class="task-pri ${escapeHtml(priority)}">${escapeHtml(priority)}</span>` : "";
         return `<li>
           <span class="check">✓</span>
           ${pri}
@@ -1803,7 +1812,7 @@ function renderRecurSection() {
           <span class="rs-icon">🔁</span>
           <span class="rs-text">${escapeHtml(s.text)}</span>
           <span class="rs-schedule">${escapeHtml(scheduleLabel(s))}</span>
-          <span class="rs-pri">${escapeHtml(s.priority || "P1")}</span>
+          <span class="rs-pri">${escapeHtml(visiblePriority(s) || "P1")}</span>
           <span class="rs-tag">${escapeHtml(s.tag || "personal")}</span>
           <button class="rs-del" data-action="del-seed" data-id="${escapeHtml(s.id)}" title="删除（历史实例保留）">×</button>
         </li>`;
@@ -1833,7 +1842,6 @@ function renderRecurSection() {
           <option value="P0">P0</option>
           <option value="P1" selected>P1</option>
           <option value="P2">P2</option>
-          <option value="P3">P3</option>
         </select>
         <select id="recurNewTag" title="分类">
           <option value="work">work</option>
@@ -2235,8 +2243,8 @@ function renderTask(t) {
     association.blur();
   });
   const pri=el('select','pri-select');pri.setAttribute('aria-label','优先级');pri.title='优先级';
-  for(const v of ['P0','P1','P2','P3','']) {const o=el('option','',v||'—');o.value=v;pri.appendChild(o);}
-  pri.value=t.priority||'';pri.addEventListener('change',async()=>{if(!await setPriority(t.id,pri.value||null))pri.value=t.priority||'';pri.blur();});
+  for(const v of ['P0','P1','P2','']) {const o=el('option','',v||'—');o.value=v;pri.appendChild(o);}
+  pri.value=visiblePriority(t)||'';pri.addEventListener('change',async()=>{if(!await setPriority(t.id,pri.value||null))pri.value=visiblePriority(t)||'';pri.blur();});
   const planned=btn(t.due?t.due.slice(5).replace('-','/'):'计划日',()=>openDatePicker(planned,t.due||'',v=>setDue(t.id,v)),'planned-date'+(t.due?' active':''));
   planned.title='计划日：控制何时进入清单；与截止日期独立';
   const del=btn(t.source==='claude-suggest'?'拒绝':'×',()=>deleteTask(t.id),'row-delete');del.title='删除事项';del.setAttribute('aria-label','删除事项：'+t.text);
@@ -2270,13 +2278,21 @@ for(const tab of document.querySelectorAll('[data-tab]')) {
 }
 function renderCoreSummary() {
   const root=document.getElementById('coreSummary');root.replaceChildren();
-  for(const p of state.projects.filter(p=>p.core&&!p.archived&&!p.deleted_at)) {
+  const projects=state.projects.filter(p=>p.core&&!p.archived&&!p.deleted_at);
+  if(!projects.length)return;
+  const heading=el('div','core-summary-title','核心项目进展');
+  heading.append(el('span','','点击查看项目'));root.append(heading);
+  const cards=el('div','core-summary-cards');root.append(cards);
+  for(const p of projects) {
     const progress=projectProgress(p);
     const summary=btn('',()=>{projectFilter='active';document.getElementById('projectSearch').value='';selectedProject=p.id;switchTab('projects');});
-    summary.append(el('b','',p.name),el('span','',`${progress.current?.name || (progress.milestones.length?'里程碑已完成':'待建里程碑')} · ${progress.done}/${progress.tasks.length} 项`));
-    if(progress.next)summary.append(el('span','',' · 下一步：'+progress.next.text));
-    if(progress.overdue)summary.append(el('span','overdue-text',progress.overdue+' 项逾期'));
-    root.appendChild(summary);
+    const first=el('div','core-summary-line');
+    first.append(el('b','',p.name),el('span','',`事项已完成 ${progress.done}/${progress.tasks.length} 件`));
+    if(progress.overdue)first.append(el('span','overdue-text',progress.overdue+' 件逾期'));
+    const second=el('div','core-summary-line');
+    second.append(el('span','',`当前里程碑：${progress.current?.name || (progress.milestones.length?'全部完成':'尚未添加')}`));
+    second.append(el('span','','下一步：'+(progress.next?.text||(progress.current?'为当前里程碑添加事项':progress.milestones.length?'暂无待办':'添加第一个里程碑'))));
+    summary.append(first,second);summary.title='查看项目：'+p.name;cards.append(summary);
   }
 }
 function visibleProjects() {
@@ -2401,8 +2417,11 @@ function renderProjectDetail() {
   if(progress.next)summary.append(el('span','','下一步：'+progress.next.text));
   if(progress.overdue)summary.append(el('span','overdue-text',progress.overdue+' 项逾期'));
   root.append(summary);
+  const milestoneHeading=el('div','milestone-section-heading');
+  const milestoneLabel=el('div');milestoneLabel.append(el('strong','','项目里程碑'),el('p','','按你的项目自定义；可编辑名称、负责人、日期，用 ↑ ↓ 调整顺序。'));
+  milestoneHeading.append(milestoneLabel,btn('＋ 添加里程碑',()=>openEntity('milestone',null,p),'subtle-button'));
+  root.append(milestoneHeading);
   progress.milestones.forEach((m,i)=>root.append(renderMilestone(p,m,progress.milestones,i)));
-  root.append(btn('＋ 添加里程碑',()=>openEntity('milestone',null,p),'subtle-button'));
   root.append(renderMilestone(p,null,[],0));
   const deleted=state.milestones.filter(m=>m.project_id===p.id&&m.deleted_at);
   if(deleted.length){

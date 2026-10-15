@@ -24,7 +24,7 @@ def main():
         server.APP_SUPPORT_DIR = tmp
         server.schedule_sync = lambda: None
         today = server.today_str()
-        legacy = {"id": "legacy", "text": "原有独立事项", "priority": "P0", "done": False,
+        legacy = {"id": "legacy", "text": "原有独立事项", "priority": "P3", "done": False,
                   "created": "2026-01-01T10:00:00"}
         server.write_data({"tasks": [legacy]})
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
@@ -41,6 +41,10 @@ def main():
             page.locator('#groups [data-id="legacy"]').wait_for()
             assert server.read_data()["tasks"] == [legacy], "Opening must not migrate legacy tasks"
             assert page.locator('#groups [data-id="legacy"] [data-field=owner]').input_value() == "Ocean"
+            assert page.locator('#group-P2 [data-id="legacy"]').count() == 1
+            assert page.locator('#groups [data-id="legacy"] .pri-select').input_value() == "P2"
+            assert page.locator('#priorityNav [data-group=P3], option[value=P3]').count() == 0
+            assert "P3" not in page.locator('#newPri').inner_text()
             assert page.evaluate("localDateKey('2026-10-14T16:30:00Z')") == "2026-10-15"
             assert page.evaluate("localDateKey('2026-10-15T00:30:00')") == "2026-10-15"
 

@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -48,6 +49,29 @@ class ReorderTest(unittest.TestCase):
             self.assertTrue(task["_field_updated"]["sort_order"])
         server.reorder_tasks({"ids": ["a", "b"]})
         self.assertEqual(server.read_data()["tasks"][0]["sort_order"], 0)
+
+    def test_legacy_p3_can_reorder_with_p2_without_rewriting_priorities(self):
+        data = server.read_data()
+        data["tasks"].extend([
+            {"id": "p2", "text": "Current P2", "priority": "P2"},
+            {"id": "legacy-p3", "text": "Old P3", "priority": "P3"},
+        ])
+        server.write_data(data)
+        server.reorder_tasks({"ids": ["legacy-p3", "p2"]})
+        tasks = {task["id"]: task for task in server.read_data()["tasks"]}
+        self.assertEqual(tasks["legacy-p3"]["sort_order"], 0)
+        self.assertEqual(tasks["p2"]["sort_order"], 1)
+        self.assertEqual(tasks["legacy-p3"]["priority"], "P3")
+        self.assertEqual(tasks["p2"]["priority"], "P2")
+        self.assertNotIn("priority", tasks["legacy-p3"]["_field_updated"])
+        server.reorder_tasks({"ids": ["p2", "legacy-p3"]})
+        self.assertEqual(next(task for task in server.read_data()["tasks"]
+                              if task["id"] == "legacy-p3")["sort_order"], 1)
+        before = Path(server.DATA_FILE).read_bytes()
+        for ids in (["p1", "legacy-p3"], ["a", "p2"]):
+            with self.subTest(ids=ids), self.assertRaises(ValueError):
+                server.reorder_tasks({"ids": ids})
+            self.assertEqual(Path(server.DATA_FILE).read_bytes(), before)
 
     def test_invalid_or_stale_moves_do_not_write(self):
         with open(server.DATA_FILE) as handle:

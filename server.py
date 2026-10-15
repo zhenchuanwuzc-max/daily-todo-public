@@ -584,7 +584,10 @@ def reorder_tasks(item):
                 raise ValueError("列表已变化，请刷新后重新排序")
         def group(task):
             priority = task.get("priority")
-            return priority if priority in ("P0", "P1", "P2", "P3") else "PN"
+            # Legacy P3 is displayed with P2; keep its stored value untouched.
+            if priority == "P3":
+                return "P2"
+            return priority if priority in ("P0", "P1", "P2") else "PN"
         if len({group(t) for t in selected}) != 1:
             raise ValueError("请在同一优先级内排序")
         for position, task in enumerate(selected):
