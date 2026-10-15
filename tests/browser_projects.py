@@ -60,7 +60,9 @@ def main():
             def assert_compact_sticky_heading():
                 title = page.locator("#projectDetail .project-heading h2")
                 assert title.count() == 1
-                assert title.evaluate("node => parseFloat(getComputedStyle(node).fontSize)") <= 14
+                title_size = title.evaluate("node => parseFloat(getComputedStyle(node).fontSize)")
+                open_dialogs = page.locator("dialog[open]").evaluate_all("nodes => nodes.map(node => node.id)")
+                assert title_size <= 14, f"Project heading font size is {title_size}px; open dialogs: {open_dialogs}"
                 assert page.locator("#projectDetail .project-heading").evaluate("node => getComputedStyle(node).position") == "sticky"
 
             def task_named(name):
@@ -231,6 +233,57 @@ def main():
             settle()
             assert page.locator(f'section[data-milestone-id="{first}"]').count() == 0, "Fully completed milestones hide by default"
             assert "当前：上线验收" in page.locator(".project-progress").inner_text()
+
+            # The dedicated order dialog includes hidden completed milestones and only changes order.
+            milestone_fields_before = {m["id"]: (m["name"], m["owner"]) for m in server.read_data()["milestones"]}
+            task_links_before = {t["id"]: (t.get("project_id"), t.get("milestone_id")) for t in server.read_data()["tasks"]}
+            menu_action(".project-actions", "里程碑排序")
+            order_dialog = page.locator("#milestoneOrderDialog")
+            assert order_dialog.get_by_role("heading", name="里程碑排序", exact=True).is_visible()
+            order_rows = page.locator("#milestoneOrderList .milestone-order-row")
+            def displayed_milestone_order():
+                return order_rows.evaluate_all("rows => rows.map(row => row.dataset.milestoneId)")
+            assert displayed_milestone_order() == [first, second]
+            assert order_rows.first.get_by_role("button", name="上移", exact=True).is_disabled()
+            assert order_rows.last.get_by_role("button", name="下移", exact=True).is_disabled()
+            held_order = []
+            page.evaluate("window.__heldOrder = false")
+            def hold_order(route):
+                held_order.append(route)
+                page.evaluate("window.__heldOrder = true")
+            page.route("**/milestones/reorder", hold_order)
+            order_dialog.locator(f'[data-milestone-id="{second}"]').get_by_role("button", name="上移", exact=True).click()
+            page.wait_for_function("window.__heldOrder === true")
+            assert order_dialog.locator("button").evaluate_all("buttons => buttons.every(button => button.disabled)")
+            page.keyboard.press("Escape")
+            assert order_dialog.is_visible(), "Pending order save must keep its dialog open"
+            held_order[0].fulfill(status=500, json={"error": "排序弹窗保存失败"})
+            page.wait_for_function("mutationCount === 0 && !document.querySelector('#milestoneOrderClose').disabled")
+            assert displayed_milestone_order() == [first, second]
+            assert [m["id"] for m in sorted(server.read_data()["milestones"], key=lambda m: m["sort_order"])] == [first, second]
+            assert order_dialog.locator(f'[data-milestone-id="{second}"]').get_by_role("button", name="上移", exact=True).is_enabled()
+            page.unroute("**/milestones/reorder", hold_order)
+            order_dialog.locator(f'[data-milestone-id="{second}"]').get_by_role("button", name="上移", exact=True).click()
+            page.wait_for_function("mutationCount === 0 && !document.querySelector('#milestoneOrderClose').disabled")
+            assert order_dialog.is_visible()
+            assert displayed_milestone_order() == [second, first]
+            assert [m["id"] for m in sorted(server.read_data()["milestones"], key=lambda m: m["sort_order"])] == [second, first]
+            assert {m["id"]: (m["name"], m["owner"]) for m in server.read_data()["milestones"]} == milestone_fields_before
+            assert {t["id"]: (t.get("project_id"), t.get("milestone_id")) for t in server.read_data()["tasks"]} == task_links_before
+            page.locator("#milestoneOrderClose").click()
+            order_dialog.wait_for(state="hidden")
+            settle()
+            menu_action(".project-actions", "里程碑排序")
+            assert displayed_milestone_order() == [second, first], "Reopening must show persisted order"
+            # Restore the original order to keep the remaining completion/edit scenarios independent.
+            order_dialog.locator(f'[data-milestone-id="{first}"]').get_by_role("button", name="上移", exact=True).click()
+            page.wait_for_function("mutationCount === 0 && !document.querySelector('#milestoneOrderClose').disabled")
+            assert displayed_milestone_order() == [first, second]
+            page.locator("#milestoneOrderClose").click()
+            order_dialog.wait_for(state="hidden")
+            settle()
+            assert not page.locator("#showCompletedProjectItems").is_checked()
+            assert page.locator(f'section[data-milestone-id="{first}"]').count() == 0
             page.locator("#showCompletedProjectItems").check()
             section = page.locator(f'section[data-milestone-id="{first}"]')
             assert "2/2 完成" in section.inner_text()
@@ -511,7 +564,7 @@ def main():
             assert page.locator('#groups [data-id="midnight-done"]').count() == 0
             assert page.locator('#groups [data-id="midnight-due"] .date-status').inner_text() == "逾期"
             assert not errors, errors
-            print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/sidebar creation, milestone title editing/show-completed filtering+preference/no toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 920/1013px layout, persistence; no JS errors")
+            print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/sidebar creation, dedicated milestone-order dialog/boundaries/hidden completed records/pending+failure retry, milestone title editing/show-completed filtering+preference/no toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 920/1013px layout, persistence; no JS errors")
             browser.close()
         httpd.shutdown()
 

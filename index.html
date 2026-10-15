@@ -803,9 +803,17 @@ button.milestone-title { cursor:pointer; }
 .deleted-milestones { margin-top:20px; padding-top:12px; border-top:1px solid var(--line); }
 .deleted-milestones summary { color:var(--muted); font-size:12px; cursor:pointer; }
 .deleted-milestone { display:flex; justify-content:space-between; padding:8px 0; align-items:center; color:var(--text-2); font-size:12px; }
-#entityDialog,#projectRestoreDialog { width:640px; max-width:calc(100vw - 40px); max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px); overflow:auto; border:1px solid var(--line); border-radius:14px; margin:auto; padding:32px; color:var(--text); background:var(--surface); }
-#entityDialog::backdrop,#projectRestoreDialog::backdrop { background:rgba(25,35,30,.2); }
-#entityForm h2,#projectRestoreDialog h2 { font-size:22px; margin-bottom:24px; }
+#entityDialog,#projectRestoreDialog,#milestoneOrderDialog { width:640px; max-width:calc(100vw - 40px); max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px); overflow:auto; border:1px solid var(--line); border-radius:14px; margin:auto; padding:32px; color:var(--text); background:var(--surface); }
+#entityDialog::backdrop,#projectRestoreDialog::backdrop,#milestoneOrderDialog::backdrop { background:rgba(25,35,30,.2); }
+#entityForm h2,#projectRestoreDialog h2,#milestoneOrderDialog h2 { font-size:22px; margin-bottom:24px; }
+.milestone-order-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--line); }
+.milestone-order-row:focus { outline:2px solid var(--accent); outline-offset:2px; border-radius:5px; }
+.milestone-order-index { width:24px; flex-shrink:0; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+.milestone-order-name { flex:1; min-width:0; overflow-wrap:anywhere; font-size:14px; }
+.milestone-order-name small { display:block; margin-top:4px; color:var(--muted); font-size:11px; }
+.milestone-order-row button { min-height:36px; flex-shrink:0; }
+#milestoneOrderNotice { color:var(--muted); font-size:12px; margin-top:12px; min-height:17px; }
+#milestoneOrderError { color:#b42318; font-size:12px; }
 .restore-project { display:flex; align-items:center; gap:16px; padding:14px 0; border-bottom:1px solid var(--line); }
 .restore-project > div { min-width:0; flex:1; overflow-wrap:anywhere; }
 .restore-project strong { display:block; font-size:14px; }
@@ -904,6 +912,14 @@ button.milestone-title { cursor:pointer; }
   <div id="projectRestoreList"></div>
   <p id="projectRestoreError" role="alert"></p>
   <div class="dialog-actions"><button type="button" id="projectRestoreClose">关闭</button></div>
+</dialog>
+<dialog id="milestoneOrderDialog" aria-labelledby="milestoneOrderTitle">
+  <h2 id="milestoneOrderTitle">里程碑排序</h2>
+  <p class="project-hint">按上移、下移调整，自动保存。</p>
+  <div id="milestoneOrderList"></div>
+  <p id="milestoneOrderNotice" role="status"></p>
+  <p id="milestoneOrderError" role="alert"></p>
+  <div class="dialog-actions"><button type="button" id="milestoneOrderClose">完成</button></div>
 </dialog>
 
 <div class="toast" id="toast">
@@ -2048,6 +2064,7 @@ let activeTab = localStorage.getItem('tracking-tab') === 'projects' ? 'projects'
 let selectedProject = localStorage.getItem('tracking-project') || '';
 let showCompletedProjectItems = localStorage.getItem('tracking-show-completed') === 'true';
 let dialogContext = null;
+let milestoneOrderProjectId = '';
 const fieldDrafts = new Map();
 const addDrafts = new Map();
 const thingRenderer = render;
@@ -2085,7 +2102,7 @@ function status(text, error = false) {
 }
 function isEditing() {
   const n = document.activeElement;
-  return !!n && (n.isContentEditable || n.matches('input:not([type=checkbox]),textarea,select') || document.getElementById('entityDialog').open || document.getElementById('projectRestoreDialog').open);
+  return !!n && (n.isContentEditable || n.matches('input:not([type=checkbox]),textarea,select') || document.getElementById('entityDialog').open || document.getElementById('projectRestoreDialog').open || document.getElementById('milestoneOrderDialog').open);
 }
 function requestRender() {
   if (isEditing() || taskDrag || mutationCount) { renderPending = true; return; }
@@ -2394,6 +2411,61 @@ document.getElementById('projectRestoreDialog').addEventListener('cancel',e=>{
   if(e.currentTarget.dataset.saving==='true')e.preventDefault();
 });
 
+function renderMilestoneOrderList() {
+  const root=document.getElementById('milestoneOrderList');root.replaceChildren();
+  const p=projectById(milestoneOrderProjectId);
+  const milestones=p&&!p.deleted_at?projectMilestones(p):[];
+  milestones.forEach((m,index)=>{
+    const row=el('div','milestone-order-row');row.dataset.milestoneId=m.id;row.tabIndex=-1;
+    const name=el('div','milestone-order-name',m.name);
+    const tasks=milestoneTasks(m);if(tasks.length&&tasks.every(t=>t.done))name.append(el('small','','已完成'));
+    row.append(el('span','milestone-order-index',String(index+1)),name);
+    for(const [label,delta] of [['上移',-1],['下移',1]]){
+      const move=btn(label,()=>moveOrderedMilestone(m.id,delta),'subtle-button');
+      move.disabled=index+delta<0||index+delta>=milestones.length;row.append(move);
+    }
+    root.append(row);
+  });
+  if(!milestones.length)root.append(el('p','project-hint','还没有里程碑'));
+}
+function openMilestoneOrder(p) {
+  milestoneOrderProjectId=p.id;
+  document.getElementById('milestoneOrderNotice').textContent='';
+  document.getElementById('milestoneOrderError').textContent='';
+  renderMilestoneOrderList();document.getElementById('milestoneOrderDialog').showModal();
+}
+async function moveOrderedMilestone(id,delta) {
+  const dialog=document.getElementById('milestoneOrderDialog');
+  if(dialog.dataset.saving==='true')return;
+  const p=projectById(milestoneOrderProjectId);
+  const ids=p&&!p.deleted_at?projectMilestones(p).map(m=>m.id):[];
+  const index=ids.indexOf(id),next=index+delta;
+  if(index<0||next<0||next>=ids.length)return;
+  [ids[index],ids[next]]=[ids[next],ids[index]];
+  const controls=Array.from(dialog.querySelectorAll('button')).map(control=>[control,control.disabled]);
+  dialog.dataset.saving='true';dialog.setAttribute('aria-busy','true');controls.forEach(([control])=>{control.disabled=true;});
+  document.getElementById('milestoneOrderError').textContent='';document.getElementById('milestoneOrderNotice').textContent='保存中…';
+  let ok=false;
+  try {
+    ok=await mutate('/milestones/reorder','POST',{project_id:p.id,ids},()=>{
+      ids.forEach((mid,order)=>{const milestone=milestoneById(mid);if(milestone)milestone.sort_order=order;});
+    });
+  } finally {
+    controls.forEach(([control,disabled])=>{control.disabled=disabled;});
+    delete dialog.dataset.saving;dialog.removeAttribute('aria-busy');
+  }
+  document.getElementById('milestoneOrderNotice').textContent=ok?'顺序已保存':'';
+  if(ok){
+    renderMilestoneOrderList();
+    Array.from(document.querySelectorAll('.milestone-order-row')).find(row=>row.dataset.milestoneId===id)?.focus({preventScroll:true});
+  } else document.getElementById('milestoneOrderError').textContent='排序未保存，请重试。';
+}
+document.getElementById('milestoneOrderClose').addEventListener('click',()=>document.getElementById('milestoneOrderDialog').close());
+document.getElementById('milestoneOrderDialog').addEventListener('close',()=>{milestoneOrderProjectId='';requestRender();});
+document.getElementById('milestoneOrderDialog').addEventListener('cancel',e=>{
+  if(e.currentTarget.dataset.saving==='true')e.preventDefault();
+});
+
 function openEntity(kind, entity=null, project=null) {
   dialogContext={kind,entity,project};
   const f=document.getElementById('entityForm');f.reset();
@@ -2528,7 +2600,7 @@ function renderProjectDetail() {
       requestRender();document.getElementById('showCompletedProjectItems')?.focus({preventScroll:true});
     });
     completedLabel.append(completed,el('span','','显示已完成'));actions.append(completedLabel);
-    buttons.push(btn('添加里程碑',()=>openEntity('milestone',null,p)),btn('编辑',()=>openEntity('project',p)),btn('归档',()=>mutate('/projects/'+encodeURIComponent(p.id),'PATCH',{archived:true})),btn('删除',()=>{if(confirm('删除「'+p.name+'」？\n项目会隐藏，可在项目设置中恢复；事项仍保留在事情跟进中。'))mutate('/projects/'+encodeURIComponent(p.id),'DELETE');},'danger'));
+    buttons.push(btn('添加里程碑',()=>openEntity('milestone',null,p)),btn('里程碑排序',()=>openMilestoneOrder(p)),btn('编辑',()=>openEntity('project',p)),btn('归档',()=>mutate('/projects/'+encodeURIComponent(p.id),'PATCH',{archived:true})),btn('删除',()=>{if(confirm('删除「'+p.name+'」？\n项目会隐藏，可在项目设置中恢复；事项仍保留在事情跟进中。'))mutate('/projects/'+encodeURIComponent(p.id),'DELETE');},'danger'));
   }
   if(state.projects.some(project=>project.archived||project.deleted_at))buttons.push(btn('恢复项目',openProjectRestore));
   if(buttons.length)actions.append(settingsMenu('项目设置',buttons));
