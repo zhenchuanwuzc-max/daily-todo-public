@@ -86,7 +86,7 @@ def main():
                 root.get_by_role("button", name=name, exact=True).click()
 
             def assert_project_create_reachable():
-                menu_action(".project-actions", "新增项目")
+                page.locator("#newProjectBtn").click()
                 assert page.locator("#entityTitle").inner_text() == "新建项目"
                 assert page.locator('#entityDialog [name="name"]').input_value() == ""
                 page.locator("#entityDialog").get_by_role("button", name="取消", exact=True).click()
@@ -151,10 +151,10 @@ def main():
 
             # Project create and two milestones, including core summary.
             page.locator("#projectsTab").click()
-            assert page.locator(".project-sidebar-head, #newProjectBtn, .milestone-section-heading, .project-filters, [data-filter], #projectSearch").count() == 0
-            # Creation remains available from the settings menu when no active projects exist.
+            assert page.locator(".project-sidebar-head, .milestone-section-heading, .project-filters, [data-filter], #projectSearch").count() == 0
+            # Creation remains available below the sidebar list when no active projects exist.
             assert_project_create_reachable()
-            menu_action(".project-actions", "新增项目")
+            page.locator("#newProjectBtn").click()
             save_entity("体验优化项目", "项目负责人", core=True)
             project_id = server.read_data()["projects"][0]["id"]
             assert_compact_sticky_heading()
@@ -489,7 +489,7 @@ def main():
             assert page.locator('#groups [data-id="midnight-done"]').count() == 0
             assert page.locator('#groups [data-id="midnight-due"] .date-status').inner_text() == "逾期"
             assert not errors, errors
-            print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/menu creation, milestone title editing/separate toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 920/1013px layout, persistence; no JS errors")
+            print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/sidebar creation, milestone title editing/separate toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 920/1013px layout, persistence; no JS errors")
             browser.close()
         httpd.shutdown()
 
