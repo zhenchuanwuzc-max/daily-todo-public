@@ -19,6 +19,14 @@
 - 存量事项没有负责人时显示 Ocean，没有截止日期时显示未设截止；打开页面不会批量回写。循环任务不关联项目。
 - 核心项目摘要显示当前节点、完成数、下一步和逾期事项。日期按北京时间计算，无后台推送。
 
+## 跟进配置
+
+- 新建或编辑项目时可填「钉钉群号」，每个项目分别保存；可留空或清空。
+- 「项目设置 → 人员工号」集中维护姓名与工号，自动列出当前项目、里程碑、事项中使用的负责人，也可添加人员。工号以文本保存，保留前导零；同名共用一份配置，重名同事应使用带部门等区别的显示名。存量负责人与事项不会因此被改写。
+- 「项目设置 → 周报接收群」配置独立于项目群的接收名单，一行一个群号；支持多个、去重和清空。没有进行中的项目时也可进入这两项配置。
+- 当前只保存配置，不查询或验证企业身份、不创建钉钉待办、不发送群消息，也不启动周报定时发送。群号和工号的真实身份需在后续发送前核验。
+- 修改工号会校验打开表单时的旧值，遇到他处已更正的工号提示冲突并保留输入。周报群按增删差异保存，不覆盖另一设备新增的接收群。
+
 ## 本地预览
 
 在分支 checkout 中运行 `python3 scripts/preview.py`，访问 `http://127.0.0.1:8797/`。
@@ -31,6 +39,8 @@
 python3 -m unittest discover -s tests -q
 python3 tests/browser_projects.py
 TODO_TEST_BROWSER=webkit python3 tests/browser_projects.py
+python3 tests/browser_followup_config.py
+TODO_TEST_BROWSER=webkit python3 tests/browser_followup_config.py
 python3 tests/browser_reorder.py
 ~/daily-todo/venv/bin/python setup.py py2app
 python3 scripts/install-local.py

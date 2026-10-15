@@ -803,9 +803,18 @@ button.milestone-title { cursor:pointer; }
 .deleted-milestones { margin-top:20px; padding-top:12px; border-top:1px solid var(--line); }
 .deleted-milestones summary { color:var(--muted); font-size:12px; cursor:pointer; }
 .deleted-milestone { display:flex; justify-content:space-between; padding:8px 0; align-items:center; color:var(--text-2); font-size:12px; }
-#entityDialog,#projectRestoreDialog,#milestoneOrderDialog { width:640px; max-width:calc(100vw - 40px); max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px); overflow:auto; border:1px solid var(--line); border-radius:14px; margin:auto; padding:32px; color:var(--text); background:var(--surface); }
-#entityDialog::backdrop,#projectRestoreDialog::backdrop,#milestoneOrderDialog::backdrop { background:rgba(25,35,30,.2); }
-#entityForm h2,#projectRestoreDialog h2,#milestoneOrderDialog h2 { font-size:22px; margin-bottom:24px; }
+#entityDialog,#projectRestoreDialog,#milestoneOrderDialog,#peopleDialog,#weeklyReportGroupsDialog { width:640px; max-width:calc(100vw - 40px); max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px); overflow:auto; border:1px solid var(--line); border-radius:14px; margin:auto; padding:32px; color:var(--text); background:var(--surface); }
+#entityDialog::backdrop,#projectRestoreDialog::backdrop,#milestoneOrderDialog::backdrop,#peopleDialog::backdrop,#weeklyReportGroupsDialog::backdrop { background:rgba(25,35,30,.2); }
+#entityForm h2,#projectRestoreDialog h2,#milestoneOrderDialog h2,#peopleDialog h2,#weeklyReportGroupsDialog h2 { font-size:22px; margin-bottom:24px; }
+.person-row,.people-columns { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; }
+.people-columns { font-size:12px; color:var(--text-2); margin-bottom:8px; }
+.person-row { margin-bottom:10px; }
+.person-row input,#weeklyReportGroupIds { min-width:0; width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:7px; background:var(--bg); color:var(--text); font:inherit; line-height:1.5; }
+.person-row input[readonly] { background:transparent; border-color:transparent; }
+.person-row input:focus,#weeklyReportGroupIds:focus { outline:2px solid var(--accent); outline-offset:1px; }
+#addPersonBtn { margin-top:4px; }
+#weeklyReportGroupIds { display:block; min-height:180px; resize:vertical; }
+#peopleError,#weeklyReportGroupsError { color:#b42318; font-size:12px; min-height:16px; margin-top:14px; }
 .milestone-order-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--line); }
 .milestone-order-row:focus { outline:2px solid var(--accent); outline-offset:2px; border-radius:5px; }
 .milestone-order-index { width:24px; flex-shrink:0; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
@@ -861,7 +870,7 @@ button.milestone-title { cursor:pointer; }
   <form class="add" id="newTaskForm">
     <div class="new-task-main">
       <label class="add-field">事项<input id="newText" type="text" placeholder="添加一件事…" aria-label="事项名称" required autocomplete="off"></label>
-      <label class="add-field">负责人<input id="newOwner" class="owner-input" value="Ocean" placeholder="姓名" aria-label="负责人" required></label>
+      <label class="add-field">负责人<input id="newOwner" class="owner-input" value="Ocean" placeholder="姓名" aria-label="负责人" list="peopleOptions" required></label>
       <label class="add-field">截止日期<input id="newDeadline" class="deadline-input" type="date" aria-label="截止日期" required></label>
       <button id="newTaskMore" type="button" aria-controls="newTaskOptions" aria-expanded="false">更多</button>
       <button id="addBtn" type="submit">添加</button>
@@ -897,7 +906,8 @@ button.milestone-title { cursor:pointer; }
   <form id="entityForm">
     <h2 id="entityTitle"></h2>
     <label>名称<input name="name" required maxlength="200" autocomplete="off"></label>
-    <label>负责人<input name="owner" required autocomplete="off"></label>
+    <label>负责人<input name="owner" list="peopleOptions" required autocomplete="off"></label>
+    <label id="entityDingtalkGroupLabel">钉钉群号（可选）<input name="dingtalk_group_id" maxlength="256" autocomplete="off"></label>
     <label id="entityGoalLabel">目标（可选）<textarea name="goal" rows="2"></textarea></label>
     <label id="entityDueLabel">目标日期（可选）<input name="due" type="date"></label>
     <label id="entityCoreLabel" class="check-label"><input name="core" type="checkbox"> 核心项目</label>
@@ -921,6 +931,26 @@ button.milestone-title { cursor:pointer; }
   <p id="milestoneOrderError" role="alert"></p>
   <div class="dialog-actions"><button type="button" id="milestoneOrderClose">完成</button></div>
 </dialog>
+<dialog id="peopleDialog" aria-labelledby="peopleTitle">
+  <form id="peopleForm">
+    <h2 id="peopleTitle">人员工号</h2>
+    <div class="people-columns" aria-hidden="true"><span>姓名</span><span>工号（可稍后填写）</span></div>
+    <div id="peopleList"></div>
+    <button id="addPersonBtn" class="subtle-button" type="button">＋ 添加人员</button>
+    <p id="peopleError" role="alert"></p>
+    <div class="dialog-actions"><button type="button" id="peopleCancel">取消</button><button id="peopleSave" type="submit" class="primary">保存</button></div>
+  </form>
+</dialog>
+<dialog id="weeklyReportGroupsDialog" aria-labelledby="weeklyReportGroupsTitle">
+  <form id="weeklyReportGroupsForm">
+    <h2 id="weeklyReportGroupsTitle">周报接收群</h2>
+    <textarea id="weeklyReportGroupIds" name="group_ids" aria-label="周报接收群号" aria-describedby="weeklyReportGroupsHint" rows="6" spellcheck="false"></textarea>
+    <p id="weeklyReportGroupsHint" class="project-hint">每行一个群号。保存后不会自动发送。</p>
+    <p id="weeklyReportGroupsError" role="alert"></p>
+    <div class="dialog-actions"><button type="button" id="weeklyReportGroupsCancel">取消</button><button id="weeklyReportGroupsSave" type="submit" class="primary">保存</button></div>
+  </form>
+</dialog>
+<datalist id="peopleOptions"></datalist>
 
 <div class="toast" id="toast">
   <span class="toast-text" id="toastText"></span>
@@ -957,7 +987,7 @@ button.milestone-title { cursor:pointer; }
 </div>
 
 <script>
-let state = { tasks: [], projects: [], milestones: [] };
+let state = { tasks: [], projects: [], milestones: [], people: [], weekly_report_groups: [] };
 let lastUpdated = "";
 let dirty = false;
 let taskDrag = null;
@@ -2065,6 +2095,8 @@ let selectedProject = localStorage.getItem('tracking-project') || '';
 let showCompletedProjectItems = localStorage.getItem('tracking-show-completed') === 'true';
 let dialogContext = null;
 let milestoneOrderProjectId = '';
+let peopleBase = new Map();
+let weeklyReportGroupsBase = [];
 const fieldDrafts = new Map();
 const addDrafts = new Map();
 const thingRenderer = render;
@@ -2102,7 +2134,7 @@ function status(text, error = false) {
 }
 function isEditing() {
   const n = document.activeElement;
-  return !!n && (n.isContentEditable || n.matches('input:not([type=checkbox]),textarea,select') || document.getElementById('entityDialog').open || document.getElementById('projectRestoreDialog').open || document.getElementById('milestoneOrderDialog').open);
+  return !!n && (n.isContentEditable || n.matches('input:not([type=checkbox]),textarea,select') || document.getElementById('entityDialog').open || document.getElementById('projectRestoreDialog').open || document.getElementById('milestoneOrderDialog').open || document.getElementById('peopleDialog').open || document.getElementById('weeklyReportGroupsDialog').open);
 }
 function requestRender() {
   if (isEditing() || taskDrag || mutationCount) { renderPending = true; return; }
@@ -2118,7 +2150,7 @@ async function readState(force = false) {
   if (generation !== readGeneration || (!force && mutationCount)) return;
   const fingerprint = JSON.stringify([data.revision ?? data.updated ?? data, todayStr()]);
   if (force || fingerprint !== lastUpdated) {
-    state = {tasks:[],projects:[],milestones:[],...data};
+    state = {tasks:[],projects:[],milestones:[],people:[],weekly_report_groups:[],...data};
     lastUpdated = fingerprint;
     requestRender();
   }
@@ -2128,7 +2160,7 @@ async function load() {
   try { await readState(); }
   catch (error) { status('读取失败：' + error.message + '；稍后自动重试。', true); }
 }
-function mutate(path, method, data, success) {
+function mutate(path, method, data, success, failure) {
   mutationCount++; dirty = true; readGeneration++;
   status('保存中…');
   const run = mutationChain.then(async () => {
@@ -2137,7 +2169,9 @@ function mutate(path, method, data, success) {
       if (data !== undefined) options.body = JSON.stringify(data);
       const r = await fetch(path, options);
       const result = await r.json();
-      if (!r.ok || result.ok === false || result.error) throw new Error(result.error || '保存失败');
+      if (!r.ok || result.ok === false || result.error) {
+        const error=new Error(result.error || '保存失败');error.status=r.status;throw error;
+      }
       if (success) success(result);
       // Reads are not writes: a failed refresh must never tell users to replay a successful add.
       try { await readState(true); }
@@ -2146,6 +2180,7 @@ function mutate(path, method, data, success) {
     } catch (error) {
       status('未保存：' + error.message + '。输入已保留，请重试。', true);
       showToast('未保存：' + error.message, 5000);
+      if(failure)failure(error);
       return false;
     } finally {
       mutationCount--; dirty = mutationCount > 0;
@@ -2286,7 +2321,7 @@ function renderTask(t) {
   }
   const text=rowField(t,'text','div');
   text.title=[t.note,t.tag?('分类：'+t.tag):'',t.auto_skipped?'自动跳过，未实际完成':'',t.created?('添加：'+fmtFull(t.created)):'',t.done_at?('完成：'+fmtFull(t.done_at)):''].filter(Boolean).join('\n');
-  const owner=rowField(t,'owner','input','text','Ocean');
+  const owner=rowField(t,'owner','input','text','Ocean');owner.setAttribute('list','peopleOptions');
   const dateWrap=el('span','deadline-wrap');
   const deadline=rowField(t,'deadline','input','date');
   dateWrap.classList.toggle('empty-date',!deadline.value);
@@ -2314,7 +2349,7 @@ function renderTask(t) {
 
 render = function() {
   thingRenderer();
-  renderProjectList();renderProjectDetail();renderCoreSummary();
+  renderProjectList();renderProjectDetail();renderCoreSummary();renderPeopleOptions();
   const association=document.getElementById('newAssociation');fillAssociation(association,association.value);
   if(document.getElementById('reviewModal').classList.contains('show')) renderReview();
   applyTab();
@@ -2372,6 +2407,91 @@ function renderProjectList() {
 }
 
 document.getElementById('newProjectBtn').addEventListener('click',()=>openEntity('project'));
+
+function personKey(name) { return name.trim().toLowerCase(); }
+function knownPeople() {
+  const people=new Map();
+  for(const person of state.people||[]) {
+    const name=person.name?.trim();
+    if(name)people.set(personKey(name),{name,employee_id:person.employee_id||''});
+  }
+  for(const record of [...state.tasks,...state.projects,...state.milestones]) {
+    if(record.deleted_at)continue;
+    const name=record.owner?.trim()||'Ocean',key=personKey(name);
+    if(!people.has(key))people.set(key,{name,employee_id:''});
+  }
+  if(!people.size)people.set(personKey('Ocean'),{name:'Ocean',employee_id:''});
+  return [...people.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-CN'));
+}
+function renderPeopleOptions() {
+  const list=document.getElementById('peopleOptions');list.replaceChildren();
+  for(const person of knownPeople()) {const option=el('option');option.value=person.name;list.append(option);}
+}
+function appendPersonRow(person=null) {
+  const row=el('div','person-row');row.dataset.personName=person?.name||'';
+  const name=el('input');name.name='name';name.type='text';name.value=person?.name||'';name.placeholder='姓名';name.maxLength=256;name.autocomplete='off';name.readOnly=!!person;name.setAttribute('aria-label','姓名');
+  const employee=el('input');employee.name='employee_id';employee.type='text';employee.value=person?.employee_id||'';employee.placeholder='待填写';employee.maxLength=256;employee.autocomplete='off';employee.spellcheck=false;employee.setAttribute('aria-label',(person?.name?person.name+'的':'')+'工号');
+  row.append(name,employee);document.getElementById('peopleList').append(row);return row;
+}
+function openPeople() {
+  const people=knownPeople();peopleBase=new Map(people.map(person=>[personKey(person.name),person.employee_id]));
+  document.getElementById('peopleList').replaceChildren();people.forEach(appendPersonRow);
+  document.getElementById('peopleError').textContent='';document.getElementById('peopleDialog').showModal();
+  document.querySelector('#peopleList [name=employee_id]')?.focus();
+}
+function openWeeklyReportGroups() {
+  weeklyReportGroupsBase=[...new Set((state.weekly_report_groups||[]).filter(group=>!group.deleted_at).map(group=>group.group_id))];
+  document.getElementById('weeklyReportGroupIds').value=weeklyReportGroupsBase.join('\n');
+  document.getElementById('weeklyReportGroupsError').textContent='';document.getElementById('weeklyReportGroupsDialog').showModal();
+}
+async function saveFollowupConfig(form,errorId,path,payload,success) {
+  if(form.dataset.saving==='true')return false;
+  const error=document.getElementById(errorId);error.textContent='';
+  const controls=Array.from(form.elements).map(control=>[control,control.disabled]);
+  form.dataset.saving='true';form.setAttribute('aria-busy','true');controls.forEach(([control])=>{control.disabled=true;});
+  try {
+    const ok=await mutate(path,'POST',payload,success,cause=>{
+      error.textContent=cause.status===409
+        ? cause.message+'。当前输入已保留，请复制需要保留的内容，取消并刷新页面后重新填写。'
+        : '保存失败：'+cause.message+'。内容已保留，请重试。';
+    });
+    if(!ok&&!error.textContent)error.textContent='保存失败，内容已保留，请重试。';
+    return ok;
+  } finally {
+    controls.forEach(([control,disabled])=>{control.disabled=disabled;});delete form.dataset.saving;form.removeAttribute('aria-busy');
+  }
+}
+document.getElementById('addPersonBtn').addEventListener('click',()=>appendPersonRow().querySelector('[name=name]').focus());
+document.getElementById('peopleForm').addEventListener('submit',async e=>{
+  e.preventDefault();const form=e.currentTarget;if(form.dataset.saving==='true')return;
+  const changes=[],names=new Set(),error=document.getElementById('peopleError');error.textContent='';
+  for(const row of document.querySelectorAll('#peopleList .person-row')) {
+    const nameInput=row.querySelector('[name=name]'),employeeInput=row.querySelector('[name=employee_id]');
+    const name=nameInput.value.trim(),employee_id=employeeInput.value.trim();
+    if(!name&&!employee_id)continue;
+    if(!name){error.textContent='请填写姓名。';nameInput.focus();return;}
+    const key=personKey(name);
+    if(names.has(key)){error.textContent='姓名重复，请合并为一行。';nameInput.focus();return;}
+    names.add(key);
+    const base_employee_id=peopleBase.get(key)||'';
+    if(!peopleBase.has(key)||employee_id!==base_employee_id)changes.push({name,employee_id,base_employee_id});
+  }
+  if(!changes.length){document.getElementById('peopleDialog').close();return;}
+  const ok=await saveFollowupConfig(form,'peopleError','/people/upsert',{people:changes},result=>{state.people=result.people;});
+  if(ok)document.getElementById('peopleDialog').close();
+});
+document.getElementById('weeklyReportGroupsForm').addEventListener('submit',async e=>{
+  e.preventDefault();const form=e.currentTarget;if(form.dataset.saving==='true')return;
+  const group_ids=[...new Set(document.getElementById('weeklyReportGroupIds').value.split(/\r?\n/).map(id=>id.trim()).filter(Boolean))];
+  const ok=await saveFollowupConfig(form,'weeklyReportGroupsError','/weekly-report/groups',{group_ids,base_group_ids:weeklyReportGroupsBase},result=>{state.weekly_report_groups=result.weekly_report_groups;});
+  if(ok)document.getElementById('weeklyReportGroupsDialog').close();
+});
+for(const [dialogId,formId,cancelId] of [['peopleDialog','peopleForm','peopleCancel'],['weeklyReportGroupsDialog','weeklyReportGroupsForm','weeklyReportGroupsCancel']]) {
+  const dialog=document.getElementById(dialogId);
+  document.getElementById(cancelId).addEventListener('click',()=>dialog.close());
+  dialog.addEventListener('close',()=>requestRender());
+  dialog.addEventListener('cancel',e=>{if(document.getElementById(formId).dataset.saving==='true')e.preventDefault();});
+}
 
 function renderProjectRestoreList() {
   const root=document.getElementById('projectRestoreList');root.replaceChildren();
@@ -2472,8 +2592,10 @@ function openEntity(kind, entity=null, project=null) {
   document.getElementById('entityTitle').textContent=(entity?'编辑':'新建')+(kind==='project'?'项目':'里程碑');
   f.elements.name.value=entity?.name||'';
   f.elements.owner.value=entity?.owner||project?.owner||'Ocean';
+  f.elements.dingtalk_group_id.value=entity?.dingtalk_group_id||'';
   f.elements.goal.value=entity?.goal||'';f.elements.due.value=entity?.due||'';f.elements.core.checked=!!entity?.core;
   document.getElementById('entityGoalLabel').hidden=kind!=='project';document.getElementById('entityCoreLabel').hidden=kind!=='project';document.getElementById('entityDueLabel').hidden=kind==='project';
+  document.getElementById('entityDingtalkGroupLabel').hidden=kind!=='project';
   document.getElementById('entityError').textContent='';
   document.getElementById('entityNotice').hidden=true;
   renderEntityMilestoneActions();
@@ -2537,7 +2659,11 @@ document.getElementById('entityForm').addEventListener('submit',async e=>{
   if(!c||f.dataset.saving==='true')return;
   const payload={name:f.elements.name.value.trim(),owner:f.elements.owner.value.trim()};
   if(!payload.name||!payload.owner){document.getElementById('entityError').textContent='请填写名称和负责人';return;}
-  if(c.kind==='project')Object.assign(payload,{goal:f.elements.goal.value.trim(),core:f.elements.core.checked});
+  if(c.kind==='project') {
+    Object.assign(payload,{goal:f.elements.goal.value.trim(),core:f.elements.core.checked});
+    const groupId=f.elements.dingtalk_group_id.value.trim();
+    if(groupId!==(c.entity?.dingtalk_group_id||''))payload.dingtalk_group_id=groupId;
+  }
   else Object.assign(payload,{due:f.elements.due.value||null,...(!c.entity?{project_id:c.project.id}:{})});
   const base=c.kind==='project'?'/projects':'/milestones';
   const ok=await mutateEntity(base+(c.entity?'/'+encodeURIComponent(c.entity.id):'/add'),c.entity?'PATCH':'POST',payload,result=>{
@@ -2551,6 +2677,7 @@ function milestoneAddForm(p,m) {
   const draft=addDrafts.get(key)||{text:'',owner:'Ocean',deadline:''};
   for(const [name,type,placeholder] of [['text','text','＋ 添加事项'],['owner','text','负责人'],['deadline','date','截止日期']]) {
     const input=el('input');input.name=name;input.type=type;input.placeholder=placeholder;input.value=draft[name];input.required=true;input.setAttribute('aria-label',name==='text'?'事项名称':placeholder);
+    if(name==='owner')input.setAttribute('list','peopleOptions');
     input.addEventListener('input',()=>{addDrafts.set(key,{text:form.elements.text.value,owner:form.elements.owner.value,deadline:form.elements.deadline.value});});form.appendChild(input);
   }
   const add=el('button','subtle-button','添加');add.type='submit';form.appendChild(add);
@@ -2603,6 +2730,7 @@ function renderProjectDetail() {
     buttons.push(btn('添加里程碑',()=>openEntity('milestone',null,p)),btn('里程碑排序',()=>openMilestoneOrder(p)),btn('编辑',()=>openEntity('project',p)),btn('归档',()=>mutate('/projects/'+encodeURIComponent(p.id),'PATCH',{archived:true})),btn('删除',()=>{if(confirm('删除「'+p.name+'」？\n项目会隐藏，可在项目设置中恢复；事项仍保留在事情跟进中。'))mutate('/projects/'+encodeURIComponent(p.id),'DELETE');},'danger'));
   }
   if(state.projects.some(project=>project.archived||project.deleted_at))buttons.push(btn('恢复项目',openProjectRestore));
+  buttons.push(btn('人员工号',openPeople),btn('周报接收群',openWeeklyReportGroups));
   if(buttons.length)actions.append(settingsMenu('项目设置',buttons));
   heading.append(actions);root.append(heading);
   if(!p){root.append(el('div','project-empty','选择一个项目查看进展，或点击左侧「＋ 新增项目」。'));return;}

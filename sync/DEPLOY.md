@@ -50,7 +50,8 @@ change the remote URL or create a remote repository.
   restore. Failed rebase aborts back to that snapshot. Invalid merged/remote JSON
   restores that exact pre-rebase snapshot while holding the data lock; nothing
   invalid is pushed. Existing manual Git conflicts are left for manual resolution.
-- Merge covers `tasks`, `projects`, and `milestones`, preserves unknown top-level
+- Merge covers `tasks`, `projects`, `milestones`, `people`, and
+  `weekly_report_groups`, preserves unknown top-level
   metadata, uses `max(revision)+1`, and retains the highest schema version.
   Unchanged legacy physical deletions propagate; an edit versus deletion retains
   the edited record. New soft deletions retain records and their children.
@@ -58,6 +59,11 @@ change the remote URL or create a remote repository.
   legacy `done_at`/`created`. Equal timestamps use canonical JSON as a deterministic
   tie-break. Independent edits survive, and explicit `done=false` can win.
   `done`/`done_at` and `project_id`/`milestone_id` each merge as a coupled pair.
+- People use deterministic IDs derived from normalized names; `name` and
+  `employee_id` merge together. Weekly recipient groups merge individually,
+  with `deleted_at` tombstones for removal. An older snapshot that omits either
+  new collection does not erase existing configuration. These fields only store
+  configuration; sync does not send DingTalk messages or schedule weekly reports.
 - Bad JSON, duplicate keys/IDs, non-finite numbers, or malformed collections cause
   merge failure. The merge driver never strips conflict markers or substitutes
   the one readable side.

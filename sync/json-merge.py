@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Three-way merge driver for todos.json (tasks, projects and milestones).
+"""Three-way merge driver for todos.json and its follow-up configuration.
 
 Field values are compared with the common ancestor before considering clocks.
 Only genuine same-field conflicts use _field_updated / updated_at clocks.
@@ -12,7 +12,8 @@ import os
 import sys
 import tempfile
 
-COLLECTIONS = ("tasks", "projects", "milestones")
+CONFIG_COLLECTIONS = ("people", "weekly_report_groups")
+COLLECTIONS = ("tasks", "projects", "milestones", *CONFIG_COLLECTIONS)
 MISSING = object()
 MIN_TIME = datetime.min.replace(tzinfo=timezone.utc)
 
@@ -55,6 +56,11 @@ def validate(data, *, allow_missing_tasks=False):
                 raise ValueError("done must be a boolean")
             if record.get("deleted_at") is not None and not isinstance(record["deleted_at"], str):
                 raise ValueError("deleted_at must be a timestamp or null")
+            string_fields = {"projects": ("dingtalk_group_id",),
+                             "people": ("name", "employee_id"),
+                             "weekly_report_groups": ("group_id",)}.get(name, ())
+            if any(key in record and not isinstance(record[key], str) for key in string_fields):
+                raise ValueError("follow-up configuration fields must be strings")
     for key in ("revision", "schema_version"):
         if key in data and (isinstance(data[key], bool) or not isinstance(data[key], int) or data[key] < 0):
             raise ValueError("invalid version metadata")
@@ -139,11 +145,15 @@ def _newer_stamp(ours, theirs):
     return max((ours, theirs), key=lambda value: (_time(value), _canonical(value)))
 
 
-def merge_record(base, ours, theirs):
+def merge_record(base, ours, theirs, *, collection=None):
     base = base or {}
     result, stamps = {}, {}
     all_keys = set(base) | set(ours) | set(theirs)
     groups = [("project_id", "milestone_id"), ("done", "done_at")]
+    if collection == "people":
+        # A name and employee number identify one recipient. Never combine a
+        # name from one device with an employee number from another device.
+        groups.append(("name", "employee_id"))
     grouped = {key for group in groups for key in group}
     groups += [(key,) for key in sorted(all_keys - grouped - {"_field_updated", "updated_at"})]
     for keys in groups:
@@ -184,15 +194,19 @@ def _semantic(record):
 
 
 def _merge_collection(name, ours, theirs, base):
-    maps = [{record["id"]: record for record in data.get(name, [])} for data in (ours, theirs, base)]
+    # Older app snapshots do not know the configuration collections. Their
+    # absence is not an explicit deletion. Real group removals use tombstones.
+    fallback = base.get(name, []) if name in CONFIG_COLLECTIONS else []
+    records = [data.get(name, fallback) for data in (ours, theirs, base)]
+    maps = [{record["id"]: record for record in items} for items in records]
     our_map, their_map, base_map = maps
     # Preserve the established remote-first order; sort_order is the UI ordering key.
-    order = list(dict.fromkeys([record["id"] for record in theirs.get(name, [])] + [record["id"] for record in ours.get(name, [])]))
+    order = list(dict.fromkeys([record["id"] for record in records[1]] + [record["id"] for record in records[0]]))
     merged = []
     for identity in order:
         our, their, old = our_map.get(identity), their_map.get(identity), base_map.get(identity)
         if our is not None and their is not None:
-            merged.append(merge_record(old, our, their))
+            merged.append(merge_record(old, our, their, collection=name))
         else:
             remaining = our if our is not None else their
             # A legacy physical deletion wins over an unchanged ancestor. An edit

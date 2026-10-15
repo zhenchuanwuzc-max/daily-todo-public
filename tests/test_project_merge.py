@@ -93,12 +93,137 @@ class ProjectMergeTest(unittest.TestCase):
     def test_concurrent_additions_all_collections(self):
         ours, theirs = copy.deepcopy(self.base), copy.deepcopy(self.base)
         for name in merge.COLLECTIONS:
-            ours[name].append({"id": name + "-ours"})
-            theirs[name].append({"id": name + "-theirs"})
+            ours.setdefault(name, []).append({"id": name + "-ours"})
+            theirs.setdefault(name, []).append({"id": name + "-theirs"})
         result = merge.union(ours, theirs, self.base)
         for name in merge.COLLECTIONS:
-            self.assertEqual(len(result[name]), 3)
+            self.assertEqual(len(result[name]), len(self.base.get(name, [])) + 2)
         self.assertEqual(result["revision"], 2)
+
+    def test_concurrent_people_and_report_group_additions_keep_both_sides(self):
+        ours, theirs = copy.deepcopy(self.base), copy.deepcopy(self.base)
+        ours["people"] = [edited({"id": "person-ocean", "created": EARLY}, LATER,
+                                 name="Ocean", employee_id="000123")]
+        theirs["people"] = [edited({"id": "person-lin", "created": EARLY}, LATEST,
+                                   name="Lin", employee_id="000456")]
+        ours["weekly_report_groups"] = [edited({"id": "group-one", "created": EARLY}, LATER,
+                                               group_id="chat-1", deleted_at=None)]
+        theirs["weekly_report_groups"] = [edited({"id": "group-two", "created": EARLY}, LATEST,
+                                                 group_id="chat-2", deleted_at=None)]
+        for first, second in ((ours, theirs), (theirs, ours)):
+            result = merge.union(first, second, self.base)
+            self.assertEqual({p["name"]: p["employee_id"] for p in result["people"]},
+                             {"Ocean": "000123", "Lin": "000456"})
+            self.assertEqual({g["group_id"] for g in result["weekly_report_groups"]}, {"chat-1", "chat-2"})
+
+    def test_people_name_and_employee_id_are_atomic(self):
+        base = copy.deepcopy(self.base)
+        old = edited({"id": "person-ocean", "created": EARLY}, EARLY, name="Ocean", employee_id="000001")
+        base["people"] = [old]
+        ours, theirs = copy.deepcopy(base), copy.deepcopy(base)
+        ours["people"][0] = edited(old, LATER, name="OCEAN")
+        theirs["people"][0] = edited(old, LATEST, employee_id="000002")
+        for first, second in ((ours, theirs), (theirs, ours)):
+            person = merge.union(first, second, base)["people"][0]
+            self.assertEqual((person["name"], person["employee_id"]), ("Ocean", "000002"))
+            self.assertEqual(person["_field_updated"]["employee_id"], LATEST)
+            self.assertEqual(person["_field_updated"]["name"], EARLY)
+
+    def test_employee_id_correction_beats_stale_edit_even_back_to_ancestor(self):
+        old = edited({"id": "person-ocean", "created": EARLY}, EARLY, name="Ocean", employee_id="000001")
+        corrected = edited(old, LATEST, employee_id="000001")
+        stale = edited(old, LATER, employee_id="000002")
+        for first, second in ((corrected, stale), (stale, corrected)):
+            person = merge.merge_record(old, first, second, collection="people")
+            self.assertEqual((person["name"], person["employee_id"]), ("Ocean", "000001"))
+            self.assertEqual(person["_field_updated"]["employee_id"], LATEST)
+
+    def test_same_person_concurrent_creation_is_one_complete_identity(self):
+        ours, theirs = copy.deepcopy(self.base), copy.deepcopy(self.base)
+        ours["people"] = [edited({"id": "person-ocean", "created": EARLY}, LATER,
+                                 name="Ocean", employee_id="000001")]
+        theirs["people"] = [edited({"id": "person-ocean", "created": EARLY}, LATEST,
+                                   name="OCEAN", employee_id="000002")]
+        for first, second in ((ours, theirs), (theirs, ours)):
+            people = merge.union(first, second, self.base)["people"]
+            self.assertEqual(len(people), 1)
+            self.assertEqual((people[0]["name"], people[0]["employee_id"]), ("OCEAN", "000002"))
+
+    def test_project_group_merges_independently_of_project_details(self):
+        ours, theirs = copy.deepcopy(self.base), copy.deepcopy(self.base)
+        ours["projects"][0] = edited(ours["projects"][0], LATER, dingtalk_group_id="chat-project")
+        theirs["projects"][0] = edited(theirs["projects"][0], LATEST, name="Renamed", owner="Lin")
+        for first, second in ((ours, theirs), (theirs, ours)):
+            project = merge.union(first, second, self.base)["projects"][0]
+            self.assertEqual((project["dingtalk_group_id"], project["name"], project["owner"]),
+                             ("chat-project", "Renamed", "Lin"))
+
+    def test_report_group_delete_and_restore_keep_other_groups(self):
+        base = copy.deepcopy(self.base)
+        group = edited({"id": "group-one", "created": EARLY}, EARLY, group_id="chat-1", deleted_at=None)
+        base["weekly_report_groups"] = [group]
+        ours, theirs = copy.deepcopy(base), copy.deepcopy(base)
+        ours["weekly_report_groups"][0] = edited(group, LATER, deleted_at=LATER)
+        theirs["weekly_report_groups"].append(edited({"id": "group-two", "created": EARLY}, LATEST,
+                                                   group_id="chat-2", deleted_at=None))
+        result = merge.union(ours, theirs, base)
+        groups = {g["id"]: g for g in result["weekly_report_groups"]}
+        self.assertEqual(set(groups), {"group-one", "group-two"})
+        self.assertEqual(groups["group-one"]["deleted_at"], LATER)
+        restored, stale = copy.deepcopy(result), copy.deepcopy(result)
+        restored["weekly_report_groups"] = [edited(g, LATEST, deleted_at=None) if g["id"] == "group-one" else g
+                                              for g in restored["weekly_report_groups"]]
+        for first, second in ((restored, stale), (stale, restored)):
+            final = merge.union(first, second, result)
+            self.assertTrue(all(g["deleted_at"] is None for g in final["weekly_report_groups"]))
+
+    def test_report_group_restore_back_to_ancestor_beats_stale_delete(self):
+        old = edited({"id": "group-one", "created": EARLY}, EARLY, group_id="chat-1", deleted_at=None)
+        restored, stale = edited(old, LATEST, deleted_at=None), edited(old, LATER, deleted_at=LATER)
+        for first, second in ((restored, stale), (stale, restored)):
+            group = merge.merge_record(old, first, second, collection="weekly_report_groups")
+            self.assertIsNone(group["deleted_at"])
+            self.assertEqual(group["_field_updated"]["deleted_at"], LATEST)
+
+    def test_legacy_snapshots_missing_configuration_do_not_remove_it(self):
+        base = copy.deepcopy(self.base)
+        base["people"] = [edited({"id": "person-ocean", "created": EARLY}, EARLY,
+                                 name="Ocean", employee_id="000123")]
+        base["weekly_report_groups"] = [edited({"id": "group-one", "created": EARLY}, EARLY,
+                                               group_id="chat-1", deleted_at=None)]
+        legacy = copy.deepcopy(self.base)
+        legacy["tasks"][0] = edited(legacy["tasks"][0], LATEST, text="Legacy task edit")
+        for first, second in ((legacy, base), (base, legacy), (legacy, legacy)):
+            result = merge.union(first, second, base)
+            self.assertEqual(result["people"], base["people"])
+            self.assertEqual(result["weekly_report_groups"], base["weekly_report_groups"])
+            self.assertEqual(result["tasks"][0]["text"], "Legacy task edit")
+        ours = copy.deepcopy(base)
+        ours["people"][0] = edited(ours["people"][0], LATER, employee_id="000999")
+        ours["weekly_report_groups"][0] = edited(ours["weekly_report_groups"][0], LATER, deleted_at=LATER)
+        result = merge.union(ours, legacy, base)
+        self.assertEqual(result["people"][0]["employee_id"], "000999")
+        self.assertEqual(result["weekly_report_groups"][0]["deleted_at"], LATER)
+
+    def test_legacy_documents_are_not_migrated_by_validation_or_merge(self):
+        old = copy.deepcopy(self.base)
+        before = copy.deepcopy(old)
+        merge.validate(old)
+        result = merge.union(old, old, old)
+        self.assertEqual(old, before)
+        for name in merge.CONFIG_COLLECTIONS:
+            self.assertNotIn(name, old)
+            self.assertNotIn(name, result)
+
+    def test_configuration_identifiers_must_remain_strings(self):
+        for collection, field in (("projects", "dingtalk_group_id"), ("people", "employee_id"),
+                                  ("people", "name"), ("weekly_report_groups", "group_id")):
+            for invalid in (123, None, True, [], {}):
+                with self.subTest(collection=collection, field=field, invalid=invalid):
+                    data = copy.deepcopy(self.base)
+                    data[collection] = [{"id": "record-one", field: invalid}]
+                    with self.assertRaises(ValueError):
+                        merge.validate(data)
 
     def test_project_and_milestone_independent_edits(self):
         ours, theirs = copy.deepcopy(self.base), copy.deepcopy(self.base)

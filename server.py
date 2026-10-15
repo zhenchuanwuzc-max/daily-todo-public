@@ -18,6 +18,7 @@ import tempfile
 import threading
 import hashlib
 import re
+import unicodedata
 import zipfile
 from html.parser import HTMLParser
 from urllib.parse import quote, unquote, urlsplit
@@ -419,12 +420,15 @@ def read_data():
     with _write_lock:
         if not os.path.exists(DATA_FILE):
             return {"updated": None, "tasks": [], "projects": [],
-                    "milestones": [], "revision": 0}
+                    "milestones": [], "people": [], "weekly_report_groups": [],
+                    "revision": 0}
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
         data.setdefault("tasks", [])
         data.setdefault("projects", [])
         data.setdefault("milestones", [])
+        data.setdefault("people", [])
+        data.setdefault("weekly_report_groups", [])
         data.setdefault("revision", 0)
         # Include file mtime at microsecond precision for out-of-process writers.
         data["updated"] = datetime.fromtimestamp(
@@ -602,6 +606,118 @@ def required_text(value, field):
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} required")
     return value.strip()
+
+
+def followup_text(value, field, *, allow_empty=True, allow_spaces=False):
+    """Normalize configured identifiers without turning numeric IDs into numbers."""
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be text")
+    if any(unicodedata.category(char) in ("Cc", "Cf", "Cs") for char in value):
+        raise ValueError(f"{field} cannot contain control characters")
+    value = value.strip()
+    if not allow_empty and not value:
+        raise ValueError(f"{field} required")
+    if len(value) > 256 or (not allow_spaces and any(char.isspace() for char in value)):
+        raise ValueError(f"{field} must be at most 256 characters without whitespace")
+    return value
+
+
+def followup_id(kind, value):
+    return f"{kind}-{uuid.uuid5(uuid.NAMESPACE_URL, 'daily-todo:' + kind + ':' + value).hex}"
+
+
+def upsert_people(item):
+    """Apply only supplied rows, rejecting stale employee IDs before any write."""
+    rows = item.get("people")
+    if not isinstance(rows, list):
+        raise ValueError("people must be an array")
+    normalized, names = [], set()
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("each person must be an object")
+        name = followup_text(row.get("name"), "name", allow_empty=False, allow_spaces=True)
+        identity = name.casefold()
+        if identity in names:
+            raise ValueError("同一批人员姓名不能重复")
+        names.add(identity)
+        employee_id = followup_text(row.get("employee_id"), "employee_id")
+        base = followup_text(row.get("base_employee_id"), "base_employee_id")
+        normalized.append((name, identity, employee_id, base))
+    changed = False
+    with _write_lock:
+        data = read_data()
+        existing = {person["name"].strip().casefold(): person for person in data["people"]}
+        for name, identity, employee_id, base in normalized:
+            current = existing.get(identity, {}).get("employee_id", "")
+            if current != base and current != employee_id:
+                raise ConflictError(f"{name} 的工号已更新，请刷新后再修改")
+        for name, identity, employee_id, _base in normalized:
+            person = existing.get(identity)
+            if person is None:
+                stamp = timestamp()
+                person = {"id": followup_id("person", identity), "name": name,
+                          "employee_id": employee_id, "created": stamp}
+                stamp_fields(person, list(person), stamp)
+                data["people"].append(person)
+                existing[identity] = person
+                changed = True
+            elif person.get("employee_id", "") != employee_id:
+                person["employee_id"] = employee_id
+                stamp_fields(person, ["employee_id"])
+                changed = True
+        if changed:
+            _atomic_write_todos(data)
+        result = {"ok": True, "people": data["people"], "revision": data["revision"]}
+    if changed:
+        schedule_sync()
+    return result
+
+
+def followup_group_ids(value, field):
+    if not isinstance(value, list):
+        raise ValueError(f"{field} must be an array")
+    groups = list(dict.fromkeys(followup_text(group, field, allow_empty=False) for group in value))
+    if len(groups) > 100:
+        raise ValueError(f"{field} must contain at most 100 groups")
+    return groups
+
+
+def update_weekly_report_groups(item):
+    """Merge the caller's additions/removals, retaining other clients' new groups."""
+    group_ids = followup_group_ids(item.get("group_ids"), "group_ids")
+    base_ids = followup_group_ids(item.get("base_group_ids"), "base_group_ids")
+    additions = [group for group in group_ids if group not in base_ids]
+    removals = [group for group in base_ids if group not in group_ids]
+    changed = False
+    with _write_lock:
+        data = read_data()
+        by_group = {group["group_id"]: group for group in data["weekly_report_groups"]}
+        active = {group_id for group_id, group in by_group.items() if not group.get("deleted_at")}
+        if len((active | set(additions)) - set(removals)) > 100:
+            raise ValueError("周报接收群最多 100 个，请刷新后调整")
+        for group_id, deleted in [(group, False) for group in additions] + [(group, True) for group in removals]:
+            group = by_group.get(group_id)
+            if group is None:
+                stamp = timestamp()
+                group = {"id": followup_id("weekly-group", group_id), "group_id": group_id,
+                         "deleted_at": stamp if deleted else None, "created": stamp}
+                stamp_fields(group, list(group), stamp)
+                data["weekly_report_groups"].append(group)
+                by_group[group_id] = group
+                changed = True
+            elif bool(group.get("deleted_at")) != deleted:
+                stamp = timestamp()
+                group["deleted_at"] = stamp if deleted else None
+                stamp_fields(group, ["deleted_at"], stamp)
+                changed = True
+        if changed:
+            _atomic_write_todos(data)
+        result = {"ok": True, "weekly_report_groups": data["weekly_report_groups"],
+                  "group_ids": [group["group_id"] for group in data["weekly_report_groups"]
+                                if not group.get("deleted_at")], "revision": data["revision"]}
+    if changed:
+        schedule_sync()
+    return result
 
 
 def valid_date(value, field, required=False):
@@ -799,12 +915,16 @@ def add_project(item):
         raise ValueError("core must be boolean")
     if not isinstance(item.get("goal", ""), str):
         raise ValueError("goal must be text")
+    group_id = (followup_text(item["dingtalk_group_id"], "dingtalk_group_id")
+                if "dingtalk_group_id" in item else None)
     with _write_lock:
         data = read_data()
         stamp = timestamp()
         project = {"id": f"project-{uuid.uuid4().hex}", "name": name, "owner": owner,
                    "goal": item.get("goal", "").strip(), "core": item.get("core", False),
                    "archived": False, "deleted_at": None, "created": stamp}
+        if group_id is not None:
+            project["dingtalk_group_id"] = group_id
         stamp_fields(project, list(project), stamp)
         data["projects"].append(project)
         _atomic_write_todos(data)
@@ -833,7 +953,7 @@ def add_milestone(item):
 
 
 def patch_entity(collection, entity_id, patch):
-    allowed = {"name", "owner", "goal", "core", "archived"} if collection == "projects" else {
+    allowed = {"name", "owner", "goal", "core", "archived", "dingtalk_group_id"} if collection == "projects" else {
         "name", "owner", "due"}
     with _write_lock:
         data = read_data()
@@ -849,6 +969,8 @@ def patch_entity(collection, entity_id, patch):
             if not isinstance(changes["goal"], str):
                 raise ValueError("goal must be text")
             changes["goal"] = changes["goal"].strip()
+        if "dingtalk_group_id" in changes:
+            changes["dingtalk_group_id"] = followup_text(changes["dingtalk_group_id"], "dingtalk_group_id")
         if "due" in changes:
             changes["due"] = valid_date(changes["due"], "due")
         fields = [key for key, value in changes.items() if target.get(key) != value]
@@ -911,6 +1033,9 @@ def replace_snapshot(payload):
         for collection in ("projects", "milestones"):
             if collection in payload and payload[collection] != current[collection]:
                 raise ValueError("项目和里程碑请使用单条保存接口")
+        for collection in ("people", "weekly_report_groups"):
+            if collection in payload and payload[collection] != current[collection]:
+                raise ValueError("人员和周报接收群请使用配置接口")
         seen = set()
         by_id = {t["id"]: t for t in current["tasks"]}
         for task in tasks:
@@ -1244,6 +1369,10 @@ class Handler(BaseHTTPRequestHandler):
                             "revision": read_data()["revision"]})
             elif path == "/projects/add":
                 self._entity_response("projects", add_project(self._payload()))
+            elif path == "/people/upsert":
+                self._json(upsert_people(self._payload()))
+            elif path == "/weekly-report/groups":
+                self._json(update_weekly_report_groups(self._payload()))
             elif path == "/milestones/add":
                 self._entity_response("milestones", add_milestone(self._payload()))
             elif path == "/milestones/reorder":
