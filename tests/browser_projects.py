@@ -45,7 +45,7 @@ def main():
             assert page.evaluate("localDateKey('2026-10-15T00:30:00')") == "2026-10-15"
 
             def settle():
-                page.locator("h1").click()
+                page.evaluate("document.activeElement?.blur()")
                 page.wait_for_function("mutationCount === 0 && !renderPending")
 
             def task_named(name):

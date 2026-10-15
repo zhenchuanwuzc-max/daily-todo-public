@@ -32,8 +32,6 @@
     font-size: 14px;
   }
   .app-shell { max-width: 1080px; margin: 0 auto; }
-  .app-titlebar { margin-left: 184px; }
-  .app-titlebar header { margin-bottom: 4px; }
   .app-toolbar {
     position: sticky; top: 0; z-index: 30;
     margin-left: 184px; margin-bottom: 12px; padding: 12px 0;
@@ -698,17 +696,20 @@
   .recur-add-form button:hover { opacity: 0.9; }
 /* Project tracking: shared, compact inline task rows. */
 [hidden] { display:none !important; }
-body { min-width:900px; padding:24px 20px; }
+body { min-width:900px; padding:16px 20px; }
 .app-shell { max-width:1440px; }
-.app-titlebar,.app-toolbar { margin-left:0; }
+.app-toolbar { margin-left:0; margin-bottom:4px; padding:0 0 8px; }
 .app-layout { grid-template-columns:132px minmax(0,1fr); gap:20px; }
-.view-tabs { display:flex; gap:4px; margin:20px 0 12px; border-bottom:1px solid var(--line); }
-.view-tabs button { font:inherit; background:transparent; border:0; border-bottom:2px solid transparent; padding:10px 20px; color:var(--text-2); cursor:pointer; }
-.view-tabs button[aria-selected=true] { border-bottom-color:var(--accent); color:var(--accent); font-weight:600; }
-.save-status { min-height:22px; padding:2px 0; font-size:12px; color:var(--muted); }
+.view-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:12px; border-bottom:1px solid var(--line); }
+.view-tabs { display:flex; gap:4px; }
+.view-tabs [role=tab] { font:inherit; background:transparent; border:0; border-bottom:2px solid transparent; padding:10px 20px; color:var(--text-2); cursor:pointer; }
+.view-tabs [aria-selected=true] { border-bottom-color:var(--accent); color:var(--accent); font-weight:600; }
+.save-status { position:fixed; right:20px; bottom:16px; z-index:60; max-width:calc(100vw - 40px); padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:var(--surface); font-size:12px; color:var(--muted); }
+.save-status:empty { display:none; }
 .save-status.error { color:#b42318; }
-.core-summary { display:flex; gap:10px; flex-wrap:wrap; }
+.core-summary { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
 .core-summary:empty { display:none; }
+.app-footer { display:flex; justify-content:center; gap:12px; flex-wrap:wrap; }
 .core-summary button { border:1px solid #d4e7e0; background:#f1f7f4; border-radius:8px; padding:9px 12px; cursor:pointer; text-align:left; font:inherit; color:var(--text-2); font-size:12px; }
 .core-summary b { color:var(--accent); margin-right:8px; }
 .core-summary .overdue-text { color:#b42318; margin-left:8px; }
@@ -746,7 +747,7 @@ body { min-width:900px; padding:24px 20px; }
 .inline-task.saving { opacity:.65; }
 .inline-task input[type=checkbox] { flex-shrink:0; accent-color:var(--accent); }
 .inline-task .drag-handle { width:18px; padding-left:0; padding-right:0; }
-#projectsView { display:grid; grid-template-columns:220px minmax(0,1fr); gap:28px; align-items:start; margin-top:8px; }
+#projectsView { display:grid; grid-template-columns:220px minmax(0,1fr); gap:28px; align-items:start; }
 .project-sidebar { position:sticky; top:20px; }
 .project-sidebar-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
 .project-sidebar input { width:100%; padding:8px 10px; background:var(--surface); font:inherit; border:1px solid var(--line); border-radius:6px; font-size:12px; }
@@ -802,31 +803,26 @@ button:disabled { cursor:default; opacity:.5; }
 </head>
 <body>
 <div class="app-shell">
-<div class="app-titlebar">
-  <header>
-    <h1>每日待办<span class="total" id="total"></span></h1>
-    <div class="header-right">
+<div class="view-header">
+  <div class="view-tabs" role="tablist" aria-label="跟进视图">
+    <button id="thingsTab" role="tab" aria-controls="thingsView" aria-selected="true" data-tab="things">事情跟进</button>
+    <button id="projectsTab" role="tab" aria-controls="projectsView" aria-selected="false" data-tab="projects">项目跟进</button>
+  </div>
+    <div class="header-right" role="group" aria-label="页面操作">
       <button class="btn-icon" id="syncBtn" title="手动同步：拉取其他设备的最新改动并刷新">🔄 同步</button>
       <button class="btn-icon" id="futureBtn" title="未来项（30 天内已计划但未到日）">📅 未来</button>
       <button class="btn-icon" id="reviewBtn" title="周复盘">📊 复盘</button>
     </div>
-  </header>
 </div>
-<div class="view-tabs" role="tablist" aria-label="跟进视图">
-  <button id="thingsTab" role="tab" aria-controls="thingsView" aria-selected="true" data-tab="things">事情跟进</button>
-  <button id="projectsTab" role="tab" aria-controls="projectsView" aria-selected="false" data-tab="projects">项目跟进</button>
-</div>
-<div id="coreSummary" class="core-summary" aria-label="核心项目进展"></div>
-<div id="saveStatus" class="save-status" role="status" aria-live="polite"></div>
-<div class="app-toolbar">
-
   <div class="update-banner" id="updateBanner">
     <span class="ub-text">🆕 新版本 <span class="ub-ver" id="updateVer">—</span> 已发布</span>
     <button class="ub-btn" id="updateNow">立即更新</button>
     <button class="ub-btn" id="updateView" style="background:rgba(255,255,255,0.2);color:white;">查看</button>
     <button class="ub-close" id="updateDismiss" title="忽略">×</button>
   </div>
-
+<div id="coreSummary" class="core-summary" aria-label="核心项目进展"></div>
+<div id="saveStatus" class="save-status" role="status" aria-live="polite"></div>
+<div class="app-toolbar">
   <form class="add" id="newTaskForm">
     <input id="newText" type="text" placeholder="添加一件事…" aria-label="事项名称" required autocomplete="off">
     <input id="newOwner" class="owner-input" value="Ocean" placeholder="负责人" aria-label="负责人" required>
@@ -846,7 +842,6 @@ button:disabled { cursor:default; opacity:.5; }
 <div class="wrap">
   <div id="groups"></div>
 
-  <footer><span id="meta">—</span></footer>
 </div>
 </div>
 <section id="projectsView" role="tabpanel" aria-labelledby="projectsTab" hidden>
@@ -860,6 +855,7 @@ button:disabled { cursor:default; opacity:.5; }
   </aside>
   <main id="projectDetail"></main>
 </section>
+<footer class="app-footer"><span id="meta">—</span><span id="environmentLabel" class="meta"></span></footer>
 </div>
 <dialog id="entityDialog">
   <form id="entityForm">
@@ -1274,11 +1270,6 @@ function render() {
   }
 
   const nOpen = buckets.P0.length + buckets.P1.length + buckets.P2.length + buckets.P3.length + buckets.PN.length;
-  const parts = [`${nOpen} 件未完`];
-  if (buckets.suggest.length) parts.push(`💡${buckets.suggest.length} 建议待审`);
-  if (buckets.done.length) parts.push(`${buckets.done.length} 今日完成`);
-  if (buckets.future.length) parts.push(`${buckets.future.length} 未来`);
-  document.getElementById("total").textContent = "· " + parts.join(" · ");
   document.getElementById("meta").textContent =
     "更新 " + (state.updated || "—").replace("T", " ").slice(0, 16);
 
@@ -2262,6 +2253,7 @@ function applyTab() {
   document.getElementById('thingsView').hidden=activeTab!=='things';
   document.getElementById('projectsView').hidden=activeTab!=='projects';
   document.getElementById('newTaskForm').hidden=activeTab!=='things';
+  document.querySelector('.app-toolbar').hidden=activeTab!=='things';
   for(const tab of document.querySelectorAll('[data-tab]')) {
     tab.setAttribute('aria-selected',String(tab.dataset.tab===activeTab));
     tab.tabIndex=tab.dataset.tab===activeTab?0:-1;
@@ -2428,8 +2420,7 @@ document.getElementById('newTaskForm').addEventListener('submit',async e=>{
 });
 applyTab();load();setInterval(load,5000);
 fetch('/version',{cache:'no-store'}).then(r=>r.json()).then(v=>{
-  const label=el('span','meta',v.preview?'隔离预览 · 数据副本':('v'+(v.version||'1.1.0')));
-  label.id='environmentLabel';document.querySelector('.app-titlebar').appendChild(label);
+  document.getElementById('environmentLabel').textContent=v.preview?'隔离预览 · 数据副本':('v'+(v.version||'1.1.0'));
 }).catch(()=>{});
 
 </script>
