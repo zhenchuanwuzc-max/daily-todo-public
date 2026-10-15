@@ -710,20 +710,21 @@ body { min-width:900px; padding:16px 20px; }
 .core-summary { margin-bottom:12px; }
 .core-summary:empty { display:none; }
 .app-footer { display:flex; justify-content:center; gap:12px; flex-wrap:wrap; }
-.core-summary-title { color:var(--text-2); font-size:12px; margin-bottom:6px; }
-.core-summary-title span { color:var(--muted); margin-left:8px; font-size:11px; }
 .core-summary-cards { display:flex; gap:8px; flex-wrap:wrap; }
 .core-summary button { border:1px solid #d4e7e0; background:#f1f7f4; border-radius:8px; padding:8px 12px; cursor:pointer; text-align:left; font:inherit; color:var(--text-2); font-size:12px; max-width:100%; }
 .core-summary b { color:var(--accent); }
 .core-summary-line { display:flex; gap:6px 14px; flex-wrap:wrap; align-items:baseline; line-height:1.7; }
 .core-summary .overdue-text { color:#b42318; }
-.milestone-section-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:6px; }
-.milestone-section-heading strong { font-size:14px; }
-.add input { font:inherit; color:var(--text); background:transparent; border:0; outline:0; min-width:0; padding:5px 2px; }
-.add #newText { flex:1; min-width:150px; }
-.add .owner-input { flex:0 0 75px; width:75px; }
-.add .deadline-input { width:130px; flex:0 0 130px; font-size:12px; color:var(--text-2); }
-.add .association { width:140px; }
+#newTaskForm { display:block; padding:12px; }
+.new-task-main { display:grid; grid-template-columns:minmax(200px,1fr) 104px 168px auto auto; align-items:end; gap:12px; }
+.add .add-field { display:flex; flex-direction:column; gap:6px; min-width:0; font-size:11px; color:var(--muted); }
+.add .add-field input,.add .add-field select { width:100%; min-width:0; height:36px; border:1px solid var(--line); border-radius:6px; padding:7px 10px; background:var(--bg); font:inherit; font-size:13px; color:var(--text); }
+.add .add-field select { appearance:auto; -webkit-appearance:auto; }
+.add .add-field input:focus,.add .add-field select:focus { outline:0; border-color:var(--accent); }
+.add #addBtn,.add #newTaskMore { margin:0; min-height:36px; padding:7px 14px; font:inherit; font-size:12px; white-space:nowrap; }
+.add #newTaskMore { border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--text-2); cursor:pointer; }
+.add #newTaskMore[aria-expanded=true] { color:var(--accent); background:#eaf3f0; }
+.new-task-options { display:grid; grid-template-columns:130px 130px minmax(200px,1fr); gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
 .inline-task { flex-wrap:nowrap; min-height:48px; gap:7px !important; }
 .inline-task .text { flex:1 1 auto; min-width:80px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:5px 2px; border:1px solid transparent; border-radius:4px; }
 .inline-task .text:focus { outline:0; border-color:#b5d6ce; background:var(--surface); text-overflow:clip; }
@@ -743,8 +744,6 @@ body { min-width:900px; padding:16px 20px; }
 .inline-task .association { flex:0 1 144px; width:144px; }
 .inline-task .association[data-empty=true] { color:var(--muted); }
 .inline-task .pri-select { width:40px; flex-shrink:0; }
-.inline-task .planned-date { border:0; background:transparent; color:var(--muted); font-size:10px; width:44px; padding:4px 0; cursor:pointer; }
-.inline-task .planned-date.active { color:var(--accent); }
 .inline-task .row-delete { border:0; background:none; color:var(--muted); cursor:pointer; width:20px; font-size:17px; }
 .inline-task .row-delete:hover { color:#b42318; }
 .inline-task .text[contenteditable=true] { display:block; }
@@ -755,11 +754,6 @@ body { min-width:900px; padding:16px 20px; }
 .inline-task .drag-handle { width:18px; padding-left:0; padding-right:0; }
 #projectsView { display:grid; grid-template-columns:220px minmax(0,1fr); gap:28px; align-items:start; }
 .project-sidebar { position:sticky; top:20px; }
-.project-sidebar-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
-.project-sidebar input { width:100%; padding:8px 10px; background:var(--surface); font:inherit; border:1px solid var(--line); border-radius:6px; font-size:12px; }
-.project-filters { display:flex; gap:4px; margin:10px 0; }
-.project-filters button { flex:1; font-size:11px; padding:6px 0; background:transparent; border:0; border-radius:4px; color:var(--text-2); cursor:pointer; }
-.project-filters button[aria-pressed=true] { background:#eaf3f0; color:var(--accent); }
 .project-item { display:block; border:1px solid transparent; border-radius:7px; width:100%; padding:11px 10px; margin-bottom:4px; background:transparent; text-align:left; cursor:pointer; font:inherit; }
 .project-item strong { display:block; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .project-item small { display:block; margin-top:5px; color:var(--muted); font-size:11px; }
@@ -768,9 +762,8 @@ body { min-width:900px; padding:16px 20px; }
 .project-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px; }
 .project-heading h2 { font-size:19px; margin-bottom:7px; }
 .project-heading p { color:var(--text-2); line-height:1.6; white-space:pre-wrap; }
-.project-owner { color:var(--muted); font-size:12px; margin-top:5px; }
 .project-actions { display:flex; gap:6px; white-space:nowrap; }
-.project-actions button,.milestone-actions button,.subtle-button,.dialog-actions button,.project-sidebar-head button { border:1px solid var(--line); background:var(--surface); color:var(--text-2); font-family:inherit; border-radius:5px; padding:6px 9px; cursor:pointer; font-size:12px; }
+.project-actions button,.subtle-button,.dialog-actions button,.entity-milestone-actions button { border:1px solid var(--line); background:var(--surface); color:var(--text-2); font-family:inherit; border-radius:5px; padding:6px 9px; cursor:pointer; font-size:12px; }
 button.primary { background:var(--accent); border-color:var(--accent); color:white; }
 button.danger { color:#b42318; }
 button:disabled { cursor:default; opacity:.5; }
@@ -778,10 +771,10 @@ button:disabled { cursor:default; opacity:.5; }
 .project-progress b { color:var(--text); }
 .milestone { margin-bottom:18px; }
 .milestone-head { display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line); padding:10px 0; }
+.milestone-toggle { flex-shrink:0; width:24px; min-height:28px; padding:0; border:0; border-radius:4px; background:none; color:var(--text-2); font:inherit; cursor:pointer; }
+.milestone-toggle:hover,.milestone-title:hover { background:var(--hover); }
 .milestone-title { border:0; background:none; text-align:left; font:inherit; font-weight:600; color:var(--text); cursor:pointer; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .milestone-meta { color:var(--muted); font-size:11px; white-space:nowrap; }
-.milestone-actions { display:flex; gap:3px; margin-left:auto; }
-.milestone-actions button { border:0; background:transparent; padding:4px; font-size:11px; }
 .action-menu { position:relative; }
 .action-menu > summary { list-style:none; cursor:pointer; font-size:12px; color:var(--text-2); padding:6px 9px; border:1px solid var(--line); border-radius:5px; background:var(--surface); white-space:nowrap; }
 .action-menu > summary::-webkit-details-marker { display:none; }
@@ -803,17 +796,27 @@ button:disabled { cursor:default; opacity:.5; }
 .deleted-milestones { margin-top:20px; padding-top:12px; border-top:1px solid var(--line); }
 .deleted-milestones summary { color:var(--muted); font-size:12px; cursor:pointer; }
 .deleted-milestone { display:flex; justify-content:space-between; padding:8px 0; align-items:center; color:var(--text-2); font-size:12px; }
-#entityDialog { width:640px; max-width:calc(100vw - 40px); max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px); overflow:auto; border:1px solid var(--line); border-radius:14px; margin:auto; padding:32px; color:var(--text); background:var(--surface); }
-#entityDialog::backdrop { background:rgba(25,35,30,.2); }
-#entityForm h2 { font-size:22px; margin-bottom:24px; }
+#entityDialog,#projectRestoreDialog { width:640px; max-width:calc(100vw - 40px); max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px); overflow:auto; border:1px solid var(--line); border-radius:14px; margin:auto; padding:32px; color:var(--text); background:var(--surface); }
+#entityDialog::backdrop,#projectRestoreDialog::backdrop { background:rgba(25,35,30,.2); }
+#entityForm h2,#projectRestoreDialog h2 { font-size:22px; margin-bottom:24px; }
+.restore-project { display:flex; align-items:center; gap:16px; padding:14px 0; border-bottom:1px solid var(--line); }
+.restore-project > div { min-width:0; flex:1; overflow-wrap:anywhere; }
+.restore-project strong { display:block; font-size:14px; }
+.restore-project small { display:block; margin-top:5px; color:var(--muted); font-size:12px; }
+.restore-project button { flex-shrink:0; min-height:36px; }
+#projectRestoreError { color:#b42318; font-size:12px; margin-top:12px; }
 #entityForm label { display:block; margin:18px 0; font-size:14px; color:var(--text-2); }
 #entityForm label>input:not([type=checkbox]),#entityForm textarea { display:block; width:100%; min-height:44px; margin-top:8px; padding:10px 12px; border:1px solid var(--line); border-radius:7px; font:inherit; font-size:15px; line-height:1.5; color:var(--text); background:var(--bg); }
 #entityForm textarea { min-height:120px; resize:vertical; }
 #entityForm .check-label { display:flex; align-items:center; gap:8px; }
 #entityForm #entityError { color:#b42318; font-size:12px; min-height:16px; }
+.entity-milestone-actions { display:flex; flex-wrap:wrap; gap:8px; border-top:1px solid var(--line); padding-top:18px; margin-top:22px; }
+.entity-milestone-actions button { min-height:36px; }
+.entity-milestone-actions .danger { margin-left:auto; }
+#entityNotice { color:var(--muted); font-size:12px; line-height:1.6; margin-top:12px; }
 .dialog-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:24px; }
 .dialog-actions button { min-width:88px; min-height:42px; padding:9px 20px; font-size:14px; }
-@media(max-width:1150px) { .app-layout{grid-template-columns:105px minmax(0,1fr);gap:12px;} #projectsView{grid-template-columns:180px minmax(0,1fr);gap:16px;} .inline-task .association{flex-basis:104px;width:104px;} .add .association{width:110px;} .inline-task .owner-input{width:56px;flex-basis:56px;} }
+@media(max-width:1150px) { .app-layout{grid-template-columns:105px minmax(0,1fr);gap:12px;} #projectsView{grid-template-columns:180px minmax(0,1fr);gap:16px;} .inline-task .association{flex-basis:104px;width:104px;} .inline-task .owner-input{width:56px;flex-basis:56px;} }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; transition:none !important; } }
 
 </style>
@@ -841,13 +844,18 @@ button:disabled { cursor:default; opacity:.5; }
 <div id="saveStatus" class="save-status" role="status" aria-live="polite"></div>
 <div class="app-toolbar">
   <form class="add" id="newTaskForm">
-    <input id="newText" type="text" placeholder="添加一件事…" aria-label="事项名称" required autocomplete="off">
-    <input id="newOwner" class="owner-input" value="Ocean" placeholder="负责人" aria-label="负责人" required>
-    <input id="newDeadline" class="deadline-input" type="date" aria-label="截止日期" title="截止日期（必填）" required>
-    <select id="newPri" title="优先级"><option>P0</option><option selected>P1</option><option>P2</option></select>
-    <select id="newTag" title="分类"><option>work</option><option>startup</option><option>personal</option></select>
-    <select id="newAssociation" class="association" aria-label="所属项目和里程碑"><option value="">不关联项目</option></select>
-    <button id="addBtn" type="submit">添加</button>
+    <div class="new-task-main">
+      <label class="add-field">事项<input id="newText" type="text" placeholder="添加一件事…" aria-label="事项名称" required autocomplete="off"></label>
+      <label class="add-field">负责人<input id="newOwner" class="owner-input" value="Ocean" placeholder="姓名" aria-label="负责人" required></label>
+      <label class="add-field">截止日期<input id="newDeadline" class="deadline-input" type="date" aria-label="截止日期" required></label>
+      <button id="newTaskMore" type="button" aria-controls="newTaskOptions" aria-expanded="false">更多</button>
+      <button id="addBtn" type="submit">添加</button>
+    </div>
+    <div id="newTaskOptions" class="new-task-options" hidden>
+      <label class="add-field">优先级<select id="newPri" title="优先级"><option>P0</option><option selected>P1</option><option>P2</option></select></label>
+      <label class="add-field">分类<select id="newTag" title="分类"><option value="work">工作</option><option value="startup">创业</option><option value="personal">个人</option></select></label>
+      <label class="add-field">项目与里程碑<select id="newAssociation" class="association" aria-label="所属项目和里程碑"><option value="">不关联项目</option></select></label>
+    </div>
   </form>
 
 </div>
@@ -863,11 +871,6 @@ button:disabled { cursor:default; opacity:.5; }
 </div>
 <section id="projectsView" role="tabpanel" aria-labelledby="projectsTab" hidden>
   <aside class="project-sidebar">
-    <div class="project-sidebar-head"><strong>项目</strong><button id="newProjectBtn" class="primary">＋ 项目</button></div>
-    <input id="projectSearch" type="search" placeholder="搜索项目或负责人" aria-label="搜索项目或负责人">
-    <div class="project-filters" aria-label="项目状态">
-      <button data-filter="active" aria-pressed="true">进行中</button><button data-filter="archived" aria-pressed="false">已归档</button><button data-filter="trash" aria-pressed="false">回收站</button>
-    </div>
     <div id="projectList"></div>
   </aside>
   <main id="projectDetail"></main>
@@ -882,9 +885,17 @@ button:disabled { cursor:default; opacity:.5; }
     <label id="entityGoalLabel">目标（可选）<textarea name="goal" rows="2"></textarea></label>
     <label id="entityDueLabel">目标日期（可选）<input name="due" type="date"></label>
     <label id="entityCoreLabel" class="check-label"><input name="core" type="checkbox"> 核心项目</label>
+    <div id="entityMilestoneActions" class="entity-milestone-actions" hidden></div>
+    <p id="entityNotice" role="status" hidden></p>
     <p id="entityError" role="alert"></p>
     <div class="dialog-actions"><button type="button" id="entityCancel">取消</button><button type="submit" class="primary">保存</button></div>
   </form>
+</dialog>
+<dialog id="projectRestoreDialog" aria-labelledby="projectRestoreTitle">
+  <h2 id="projectRestoreTitle">恢复项目</h2>
+  <div id="projectRestoreList"></div>
+  <p id="projectRestoreError" role="alert"></p>
+  <div class="dialog-actions"><button type="button" id="projectRestoreClose">关闭</button></div>
 </dialog>
 
 <div class="toast" id="toast">
@@ -2027,7 +2038,6 @@ let readGeneration = 0;
 let renderPending = false;
 let activeTab = localStorage.getItem('tracking-tab') === 'projects' ? 'projects' : 'things';
 let selectedProject = localStorage.getItem('tracking-project') || '';
-let projectFilter = 'active';
 let dialogContext = null;
 const fieldDrafts = new Map();
 const addDrafts = new Map();
@@ -2067,7 +2077,7 @@ function status(text, error = false) {
 }
 function isEditing() {
   const n = document.activeElement;
-  return !!n && (n.isContentEditable || n.matches('input:not([type=checkbox]),textarea,select') || document.getElementById('entityDialog').open);
+  return !!n && (n.isContentEditable || n.matches('input:not([type=checkbox]),textarea,select') || document.getElementById('entityDialog').open || document.getElementById('projectRestoreDialog').open);
 }
 function requestRender() {
   if (isEditing() || taskDrag || mutationCount) { renderPending = true; return; }
@@ -2272,10 +2282,8 @@ function renderTask(t) {
   const pri=el('select','pri-select');pri.setAttribute('aria-label','优先级');pri.title='优先级';
   for(const v of ['P0','P1','P2','']) {const o=el('option','',v||'—');o.value=v;pri.appendChild(o);}
   pri.value=visiblePriority(t)||'';pri.addEventListener('change',async()=>{if(!await setPriority(t.id,pri.value||null))pri.value=visiblePriority(t)||'';pri.blur();});
-  const planned=btn(t.due?t.due.slice(5).replace('-','/'):'计划日',()=>openDatePicker(planned,t.due||'',v=>setDue(t.id,v)),'planned-date'+(t.due?' active':''));
-  planned.title='计划日：控制何时进入清单；与截止日期独立';
   const del=btn(t.source==='claude-suggest'?'拒绝':'×',()=>deleteTask(t.id),'row-delete');del.title='删除事项';del.setAttribute('aria-label','删除事项：'+t.text);
-  li.append(lead,text,owner,dateWrap,association,pri,planned,del);
+  li.append(lead,text,owner,dateWrap,association,pri,del);
   return li;
 }
 
@@ -2308,12 +2316,10 @@ function renderCoreSummary() {
   const root=document.getElementById('coreSummary');root.replaceChildren();
   const projects=state.projects.filter(p=>p.core&&!p.archived&&!p.deleted_at);
   if(!projects.length)return;
-  const heading=el('div','core-summary-title','核心项目进展');
-  heading.append(el('span','','点击查看项目'));root.append(heading);
   const cards=el('div','core-summary-cards');root.append(cards);
   for(const p of projects) {
     const progress=projectProgress(p);
-    const summary=btn('',()=>{projectFilter='active';document.getElementById('projectSearch').value='';selectedProject=p.id;switchTab('projects');});
+    const summary=btn('',()=>{selectedProject=p.id;switchTab('projects');});
     const first=el('div','core-summary-line');
     first.append(el('b','',p.name),el('span','',progress.tasks.length?`事项已完成 ${progress.done}/${progress.tasks.length} 件`:'尚未添加事项'));
     if(progress.overdue)first.append(el('span','overdue-text',progress.overdue+' 件逾期'));
@@ -2324,27 +2330,59 @@ function renderCoreSummary() {
   }
 }
 function visibleProjects() {
-  const query=document.getElementById('projectSearch').value.trim().toLocaleLowerCase();
-  return state.projects.filter(p=>projectFilter==='trash'?!!p.deleted_at:!p.deleted_at&&(projectFilter==='archived'?!!p.archived:!p.archived))
-    .filter(p=>!query||(p.name+' '+(p.owner||'Ocean')).toLocaleLowerCase().includes(query))
+  return state.projects.filter(p=>!p.deleted_at&&!p.archived)
     .sort((a,b)=>Number(!!b.core)-Number(!!a.core)||(a.created||'').localeCompare(b.created||'')||a.name.localeCompare(b.name));
 }
 function renderProjectList() {
   const root=document.getElementById('projectList');root.replaceChildren();
   const ps=visibleProjects();
   if(!ps.some(p=>p.id===selectedProject))selectedProject=ps[0]?.id||'';
-  for(const b of document.querySelectorAll('[data-filter]'))b.setAttribute('aria-pressed',String(b.dataset.filter===projectFilter));
   for(const p of ps) {
     const progress=projectProgress(p);
     const b=btn('',()=>{selectedProject=p.id;localStorage.setItem('tracking-project',p.id);renderProjectList();renderProjectDetail();},'project-item');
     b.dataset.projectId=p.id;b.setAttribute('aria-current',String(p.id===selectedProject));
     b.append(el('strong','',(p.core?'★ ':'')+p.name),el('small','',(p.owner||'Ocean')+(progress.tasks.length?` · ${progress.done}/${progress.tasks.length} 项完成`:'')));root.appendChild(b);
   }
-  if(!ps.length)root.append(el('p','project-hint',document.getElementById('projectSearch').value?'没有匹配的项目':'这里还没有项目'));
+  if(!ps.length)root.append(el('p','project-hint','暂无进行中的项目'));
 }
-document.getElementById('projectSearch').addEventListener('input',()=>{renderProjectList();renderProjectDetail();});
-for(const b of document.querySelectorAll('[data-filter]'))b.addEventListener('click',()=>{projectFilter=b.dataset.filter;renderProjectList();renderProjectDetail();});
-document.getElementById('newProjectBtn').addEventListener('click',()=>openEntity('project'));
+
+function renderProjectRestoreList() {
+  const root=document.getElementById('projectRestoreList');root.replaceChildren();
+  const projects=state.projects.filter(p=>p.archived||p.deleted_at);
+  for(const p of projects) {
+    const row=el('div','restore-project');row.dataset.projectId=p.id;
+    const text=el('div');text.append(el('strong','',p.name),el('small','',p.deleted_at?'已删除':'已归档'));
+    row.append(text,btn('恢复到进行中',()=>restoreProject(p),'subtle-button'));root.append(row);
+  }
+  if(!projects.length)root.append(el('p','project-hint','没有需要恢复的项目'));
+}
+function openProjectRestore() {
+  renderProjectRestoreList();document.getElementById('projectRestoreError').textContent='';
+  document.getElementById('projectRestoreDialog').showModal();
+}
+async function restoreProject(p) {
+  const dialog=document.getElementById('projectRestoreDialog');
+  if(dialog.dataset.saving==='true')return;
+  dialog.dataset.saving='true';dialog.setAttribute('aria-busy','true');
+  const controls=Array.from(dialog.querySelectorAll('button'));
+  controls.forEach(control=>{control.disabled=true;});
+  document.getElementById('projectRestoreError').textContent='';
+  let ok=true;
+  try {
+    if(p.deleted_at)ok=await mutate('/projects/'+encodeURIComponent(p.id)+'/restore','POST',{});
+    if(ok&&p.archived)ok=await mutate('/projects/'+encodeURIComponent(p.id),'PATCH',{archived:false});
+    if(ok){selectedProject=p.id;localStorage.setItem('tracking-project',p.id);dialog.close();}
+    else {renderProjectRestoreList();document.getElementById('projectRestoreError').textContent='恢复未完成，请重试。';}
+  } finally {
+    controls.forEach(control=>{control.disabled=false;});
+    delete dialog.dataset.saving;dialog.removeAttribute('aria-busy');
+  }
+}
+document.getElementById('projectRestoreClose').addEventListener('click',()=>document.getElementById('projectRestoreDialog').close());
+document.getElementById('projectRestoreDialog').addEventListener('close',()=>requestRender());
+document.getElementById('projectRestoreDialog').addEventListener('cancel',e=>{
+  if(e.currentTarget.dataset.saving==='true')e.preventDefault();
+});
 
 function openEntity(kind, entity=null, project=null) {
   dialogContext={kind,entity,project};
@@ -2355,7 +2393,57 @@ function openEntity(kind, entity=null, project=null) {
   f.elements.goal.value=entity?.goal||'';f.elements.due.value=entity?.due||'';f.elements.core.checked=!!entity?.core;
   document.getElementById('entityGoalLabel').hidden=kind!=='project';document.getElementById('entityCoreLabel').hidden=kind!=='project';document.getElementById('entityDueLabel').hidden=kind==='project';
   document.getElementById('entityError').textContent='';
+  document.getElementById('entityNotice').hidden=true;
+  renderEntityMilestoneActions();
   document.getElementById('entityDialog').showModal();f.elements.name.focus();
+}
+function renderEntityMilestoneActions() {
+  const root=document.getElementById('entityMilestoneActions');root.replaceChildren();
+  const c=dialogContext;
+  root.hidden=c?.kind!=='milestone'||!c.entity;
+  if(root.hidden)return;
+  const project=projectById(c.project.id);
+  const milestones=project?projectMilestones(project):[];
+  const index=milestones.findIndex(m=>m.id===c.entity.id);
+  for(const [label,delta] of [['上移里程碑',-1],['下移里程碑',1]]) {
+    const move=btn(label,async()=>{
+      const current=projectById(c.project.id);
+      const ids=current?projectMilestones(current).map(m=>m.id):[];
+      const from=ids.indexOf(c.entity.id),to=from+delta;
+      if(!current||current.deleted_at||from<0||to<0||to>=ids.length)return;
+      [ids[from],ids[to]]=[ids[to],ids[from]];
+      const ok=await mutateEntity('/milestones/reorder','POST',{project_id:current.id,ids},()=>{
+        ids.forEach((id,order)=>{const milestone=milestoneById(id);if(milestone)milestone.sort_order=order;});
+      });
+      if(ok){
+        const notice=document.getElementById('entityNotice');
+        notice.textContent='顺序已更新；表单修改请点保存。';notice.hidden=false;
+        renderEntityMilestoneActions();
+      }
+    });
+    move.disabled=!project||project.deleted_at||index<0||index+delta<0||index+delta>=milestones.length;root.append(move);
+  }
+  const remove=btn('删除',async()=>{
+    if(!confirm('删除此里程碑？事项会保留在「待安排」，里程碑可恢复。'))return;
+    if(await mutateEntity('/milestones/'+encodeURIComponent(c.entity.id),'DELETE'))document.getElementById('entityDialog').close();
+  },'danger');
+  remove.disabled=!project||project.deleted_at||index<0;root.append(remove);
+}
+async function mutateEntity(path,method,payload,success) {
+  const f=document.getElementById('entityForm');
+  if(f.dataset.saving==='true')return false;
+  document.getElementById('entityError').textContent='';
+  const controls=Array.from(f.elements).map(control=>[control,control.disabled]);
+  f.dataset.saving='true';f.setAttribute('aria-busy','true');
+  controls.forEach(([control])=>{control.disabled=true;});
+  try {
+    const ok=await mutate(path,method,payload,success);
+    if(!ok)document.getElementById('entityError').textContent='保存失败，内容已保留，请重试。';
+    return ok;
+  } finally {
+    controls.forEach(([control,disabled])=>{control.disabled=disabled;});
+    delete f.dataset.saving;f.removeAttribute('aria-busy');
+  }
 }
 document.getElementById('entityCancel').addEventListener('click',()=>document.getElementById('entityDialog').close());
 document.getElementById('entityDialog').addEventListener('close',()=>{dialogContext=null;requestRender();});
@@ -2364,21 +2452,16 @@ document.getElementById('entityDialog').addEventListener('cancel',e=>{
 });
 document.getElementById('entityForm').addEventListener('submit',async e=>{
   e.preventDefault();const f=e.currentTarget;const c=dialogContext;
+  if(!c||f.dataset.saving==='true')return;
   const payload={name:f.elements.name.value.trim(),owner:f.elements.owner.value.trim()};
   if(!payload.name||!payload.owner){document.getElementById('entityError').textContent='请填写名称和负责人';return;}
   if(c.kind==='project')Object.assign(payload,{goal:f.elements.goal.value.trim(),core:f.elements.core.checked});
   else Object.assign(payload,{due:f.elements.due.value||null,...(!c.entity?{project_id:c.project.id}:{})});
-  const controls = Array.from(f.elements).map(control=>[control,control.disabled]);
-  f.dataset.saving='true';f.setAttribute('aria-busy','true');
-  controls.forEach(([control])=>{control.disabled=true;});
   const base=c.kind==='project'?'/projects':'/milestones';
-  const ok=await mutate(base+(c.entity?'/'+encodeURIComponent(c.entity.id):'/add'),c.entity?'PATCH':'POST',payload,result=>{
-    if(c.kind==='project'&&!c.entity){selectedProject=result.project?.id||'';projectFilter='active';document.getElementById('projectSearch').value='';}
+  const ok=await mutateEntity(base+(c.entity?'/'+encodeURIComponent(c.entity.id):'/add'),c.entity?'PATCH':'POST',payload,result=>{
+    if(c.kind==='project'&&!c.entity)selectedProject=result.project?.id||'';
   });
-  controls.forEach(([control,disabled])=>{control.disabled=disabled;});
-  delete f.dataset.saving;f.removeAttribute('aria-busy');
   if(ok)document.getElementById('entityDialog').close();
-  else document.getElementById('entityError').textContent='保存失败，内容已保留，请重试。';
 });
 function milestoneAddForm(p,m) {
   const key=p.id+':'+(m?.id||'unscheduled');
@@ -2401,7 +2484,7 @@ function milestoneAddForm(p,m) {
   });
   return form;
 }
-function renderMilestone(p,m,allMilestones,index) {
+function renderMilestone(p,m) {
   const tasks=m?milestoneTasks(m):projectTasks(p).filter(t=>!t.milestone_id||!milestoneById(t.milestone_id)||milestoneById(t.milestone_id).deleted_at);
   tasks.sort((a,b)=>Number(!!a.done)-Number(!!b.done)||nextOrder(a,b));
   const complete=tasks.length>0&&tasks.every(t=>t.done);
@@ -2409,19 +2492,15 @@ function renderMilestone(p,m,allMilestones,index) {
   const expanded=milestoneExpanded.has(key)?milestoneExpanded.get(key):!complete;
   const section=el('section','milestone'+(!tasks.length?' empty':''));if(m)section.dataset.milestoneId=m.id;
   const header=el('div','milestone-head');
-  const heading=btn((complete?'✓ ':expanded?'▾ ':'▸ ')+(m?.name||'待安排'),()=>{milestoneExpanded.set(key,!expanded);renderProjectDetail();},'milestone-title');heading.setAttribute('aria-expanded',String(expanded));
-  header.append(heading);
+  const toggle=()=>{milestoneExpanded.set(key,!expanded);renderProjectDetail();};
+  const disclosure=btn(complete?'✓':expanded?'▾':'▸',toggle,'milestone-toggle');
+  disclosure.setAttribute('aria-expanded',String(expanded));
+  disclosure.setAttribute('aria-label',(expanded?'收起':'展开')+(m?.name||'待安排'));
+  const heading=btn(m?.name||'待安排',m&&!p.deleted_at?()=>openEntity('milestone',m,p):toggle,'milestone-title');
+  if(m&&!p.deleted_at)heading.title='点击编辑里程碑';
+  header.append(disclosure,heading);
   const metaText=[m?.owner||p.owner||'Ocean',m?.due||'',tasks.length?`${tasks.filter(t=>t.done).length}/${tasks.length} 完成`:'待拆事项'].filter(Boolean).join(' · ');
   header.append(el('span','milestone-meta',metaText));
-  if(m&&!p.deleted_at){
-    const actions=el('div','milestone-actions');
-    const buttons=[btn('编辑',()=>openEntity('milestone',m,p))];
-    for(const [label,delta] of [['上移里程碑',-1],['下移里程碑',1]]) {
-      const b=btn(label,()=>{const ids=allMilestones.map(x=>x.id);[ids[index],ids[index+delta]]=[ids[index+delta],ids[index]];mutate('/milestones/reorder','POST',{project_id:p.id,ids});});b.title=label;b.setAttribute('aria-label',label);b.disabled=index+delta<0||index+delta>=allMilestones.length;buttons.push(b);
-    }
-    buttons.push(btn('删除',()=>{if(confirm('删除此里程碑？事项会保留在「待安排」，里程碑可恢复。'))mutate('/milestones/'+encodeURIComponent(m.id),'DELETE');},'danger'));
-    actions.append(settingsMenu('设置',buttons));header.append(actions);
-  }
   section.append(header);
   const body=el('div');body.hidden=!expanded;
   const ul=el('ul');for(const t of tasks)ul.append(renderTask(t));body.append(ul);
@@ -2431,35 +2510,39 @@ function renderMilestone(p,m,allMilestones,index) {
 function renderProjectDetail() {
   const root=document.getElementById('projectDetail');root.replaceChildren();
   const p=projectById(selectedProject);
-  if(!p){root.append(el('div','project-empty','选择一个项目查看进展，或点击「＋ 项目」开始。'));return;}
-  const progress=projectProgress(p);const heading=el('div','project-heading');const title=el('div');
-  title.append(el('h2','',p.name),el('div','project-owner',(p.core?'★ 核心项目 · ':'')+'负责人 '+(p.owner||'Ocean')));
-  if(p.goal)title.append(el('p','',p.goal));heading.append(title);
+  const heading=el('div','project-heading');const title=el('div');
+  if(p)title.append(el('h2','',p.name));
+  if(p?.goal)title.append(el('p','',p.goal));heading.append(title);
   const actions=el('div','project-actions');
-  if(p.deleted_at){actions.append(btn('恢复项目',()=>mutate('/projects/'+encodeURIComponent(p.id)+'/restore','POST',{},()=>{projectFilter=p.archived?'archived':'active';}),'primary'));}
-  else {
-    actions.append(settingsMenu('项目设置',[btn('编辑',()=>openEntity('project',p)),btn(p.archived?'恢复跟进':'归档',()=>mutate('/projects/'+encodeURIComponent(p.id),'PATCH',{archived:!p.archived},()=>{projectFilter=p.archived?'active':'archived';})),btn('删除',()=>{if(confirm('删除「'+p.name+'」？\n项目进入回收站，事项仍保留在事情跟进中。'))mutate('/projects/'+encodeURIComponent(p.id),'DELETE',undefined,()=>{projectFilter='trash';});},'danger')]));
+  const buttons=[btn('新增项目',()=>openEntity('project'))];
+  if(p&&!p.deleted_at) {
+    buttons.push(btn('添加里程碑',()=>openEntity('milestone',null,p)),btn('编辑',()=>openEntity('project',p)),btn('归档',()=>mutate('/projects/'+encodeURIComponent(p.id),'PATCH',{archived:true})),btn('删除',()=>{if(confirm('删除「'+p.name+'」？\n项目会隐藏，可在项目设置中恢复；事项仍保留在事情跟进中。'))mutate('/projects/'+encodeURIComponent(p.id),'DELETE');},'danger'));
   }
+  if(state.projects.some(project=>project.archived||project.deleted_at))buttons.push(btn('恢复项目',openProjectRestore));
+  actions.append(settingsMenu('项目设置',buttons));
   heading.append(actions);root.append(heading);
+  if(!p){root.append(el('div','project-empty','选择一个项目查看进展，或在「项目设置」中新增项目。'));return;}
   if(p.deleted_at){root.append(el('p','project-hint','项目在回收站；事项仍保留在「事情跟进」。恢复项目后恢复尚未调整的关联。'));return;}
+  const progress=projectProgress(p);
   const summary=el('div','project-progress');
   summary.append(el('b','',`当前：${progress.current?.name||(progress.milestones.length?'里程碑已完成':'待建里程碑')}`),el('span','',`${progress.done}/${progress.tasks.length} 项完成 · ${progress.milestonesDone}/${progress.milestones.length} 个里程碑完成`));
   if(progress.next)summary.append(el('span','','下一步：'+progress.next.text));
   if(progress.overdue)summary.append(el('span','overdue-text',progress.overdue+' 项逾期'));
   if(progress.tasks.length)root.append(summary);
-  const milestoneHeading=el('div','milestone-section-heading');
-  const milestoneLabel=el('strong','','里程碑');
-  milestoneHeading.append(milestoneLabel,btn('＋ 添加里程碑',()=>openEntity('milestone',null,p),'subtle-button'));
-  root.append(milestoneHeading);
-  progress.milestones.forEach((m,i)=>root.append(renderMilestone(p,m,progress.milestones,i)));
+  progress.milestones.forEach(m=>root.append(renderMilestone(p,m)));
   const hasUnscheduled=projectTasks(p).some(t=>!t.milestone_id||!milestoneById(t.milestone_id)||milestoneById(t.milestone_id).deleted_at);
-  if(hasUnscheduled||!progress.milestones.length)root.append(renderMilestone(p,null,[],0));
+  if(hasUnscheduled||!progress.milestones.length)root.append(renderMilestone(p,null));
   const deleted=state.milestones.filter(m=>m.project_id===p.id&&m.deleted_at);
   if(deleted.length){
     const section=el('details','deleted-milestones');section.append(el('summary','',`已删除里程碑（${deleted.length}）`));
     for(const m of deleted){const row=el('div','deleted-milestone');row.append(el('span','',m.name),btn('恢复',()=>mutate('/milestones/'+encodeURIComponent(m.id)+'/restore','POST',{}),'subtle-button'));section.append(row);}root.append(section);
   }
 }
+document.getElementById('newTaskMore').addEventListener('click',e=>{
+  const options=document.getElementById('newTaskOptions');options.hidden=!options.hidden;
+  e.currentTarget.setAttribute('aria-expanded',String(!options.hidden));
+  e.currentTarget.textContent=options.hidden?'更多':'收起';
+});
 document.getElementById('newTaskForm').addEventListener('submit',async e=>{
   e.preventDefault();const text=document.getElementById('newText'),owner=document.getElementById('newOwner'),date=document.getElementById('newDeadline');
   if(!text.value.trim()||!owner.value.trim()||!date.value){status('请填写事项、负责人和截止日期。',true);return;}

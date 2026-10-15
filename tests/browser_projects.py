@@ -45,6 +45,11 @@ def main():
             assert page.locator('#groups [data-id="legacy"] .pri-select').input_value() == "P2"
             assert page.locator('#priorityNav [data-group=P3], option[value=P3]').count() == 0
             assert "P3" not in page.locator('#newPri').inner_text()
+            assert page.locator('.inline-task .planned-date').count() == 0
+            assert page.locator('#newTaskMore').get_attribute('aria-expanded') == 'false'
+            assert page.locator('#newTaskOptions').is_hidden()
+            for selector in ('#newText', '#newOwner', '#newDeadline'):
+                assert page.locator(selector).evaluate('input => input.labels.length > 0'), f'{selector} needs an explicit label'
             assert page.evaluate("localDateKey('2026-10-14T16:30:00Z')") == "2026-10-15"
             assert page.evaluate("localDateKey('2026-10-15T00:30:00')") == "2026-10-15"
 
@@ -74,6 +79,46 @@ def main():
                     menu.locator("summary").click()
                 root.get_by_role("button", name=name, exact=True).click()
 
+            def assert_project_create_reachable():
+                menu_action(".project-actions", "新增项目")
+                assert page.locator("#entityTitle").inner_text() == "新建项目"
+                assert page.locator('#entityDialog [name="name"]').input_value() == ""
+                page.locator("#entityDialog").get_by_role("button", name="取消", exact=True).click()
+                settle()
+
+            def restore_hidden_project(project_id, expected_status, fail_once=False):
+                menu_action(".project-actions", "恢复项目")
+                dialog = page.locator("#projectRestoreDialog")
+                dialog.wait_for(state="visible")
+                row = dialog.locator(f'[data-project-id="{project_id}"]')
+                assert expected_status in row.inner_text()
+                if fail_once:
+                    held_restore = []
+                    page.evaluate("window.__heldRestore = false")
+                    def hold_restore(route):
+                        held_restore.append(route)
+                        page.evaluate("window.__heldRestore = true")
+                    page.route(f"**/projects/{project_id}", hold_restore)
+                    row.get_by_role("button", name="恢复到进行中", exact=True).click()
+                    page.wait_for_function("window.__heldRestore === true")
+                    assert dialog.get_attribute("aria-busy") == "true"
+                    assert dialog.locator("button").evaluate_all("buttons => buttons.every(button => button.disabled)")
+                    page.keyboard.press("Escape")
+                    assert dialog.is_visible(), "Pending restore must not dismiss its dialog"
+                    held_restore[0].fulfill(status=500, json={"error": "模拟恢复失败"})
+                    page.wait_for_function("mutationCount === 0 && !document.querySelector('#projectRestoreDialog').hasAttribute('aria-busy')")
+                    assert expected_status in row.inner_text(), "A failed restore must keep the recoverable record"
+                    assert row.get_by_role("button", name="恢复到进行中", exact=True).is_enabled()
+                    assert page.locator("#projectRestoreClose").is_enabled()
+                    assert "恢复未完成" in page.locator("#projectRestoreError").inner_text()
+                    assert page.locator(".project-item").count() == 0
+                    assert next(p for p in server.read_data()["projects"] if p["id"] == project_id)["archived"] is True
+                    page.unroute(f"**/projects/{project_id}", hold_restore)
+                row.get_by_role("button", name="恢复到进行中", exact=True).click()
+                dialog.wait_for(state="hidden")
+                settle()
+                assert page.locator(f'.project-item[data-project-id="{project_id}"]').count() == 1
+
             def assert_menu_dismissal(wrapper):
                 menu = page.locator(wrapper).locator("details.action-menu")
                 assert not menu.evaluate("node => node.open"), "Settings must start collapsed"
@@ -83,7 +128,7 @@ def main():
                 assert not menu.evaluate("node => node.open"), "Escape must dismiss settings"
                 menu.locator("summary").click()
                 assert menu.evaluate("node => node.open")
-                page.locator("#projectSearch").click()
+                page.locator("#projectDetail .project-heading h2").click()
                 assert not menu.evaluate("node => node.open"), "Clicking outside must dismiss settings"
                 settle()
 
@@ -100,7 +145,10 @@ def main():
 
             # Project create and two milestones, including core summary.
             page.locator("#projectsTab").click()
-            page.locator("#newProjectBtn").click()
+            assert page.locator(".project-sidebar-head, #newProjectBtn, .milestone-section-heading, .project-filters, [data-filter], #projectSearch").count() == 0
+            # Creation remains available from the settings menu when no active projects exist.
+            assert_project_create_reachable()
+            menu_action(".project-actions", "新增项目")
             save_entity("体验优化项目", "项目负责人", core=True)
             project_id = server.read_data()["projects"][0]["id"]
             assert page.locator(".project-progress").count() == 0, "An empty project must not show an empty progress card"
@@ -113,7 +161,7 @@ def main():
             page.locator("#projectsTab").click()
             assert page.locator("#coreSummary").is_hidden()
             for name in ("方案确认", "上线验收"):
-                page.get_by_role("button", name="＋ 添加里程碑", exact=True).click()
+                menu_action(".project-actions", "添加里程碑")
                 assert page.locator('#entityDialog [name="owner"]').input_value() == "项目负责人"
                 save_entity(name)
             milestones = server.read_data()["milestones"]
@@ -122,7 +170,14 @@ def main():
             assert "待拆事项" in page.locator("#projectDetail").inner_text()
             assert page.locator(".project-progress").count() == 0
             assert page.locator('.milestone:not([data-milestone-id])').count() == 0, "Empty pending area must disappear once milestones exist"
-            assert_menu_dismissal(f'section[data-milestone-id="{first}"] .milestone-actions')
+            assert page.locator(".project-owner, .milestone-actions, .milestone-section-heading").count() == 0
+            page.locator(f'section[data-milestone-id="{first}"] .milestone-title').click()
+            assert page.locator('#entityDialog [name="name"]').input_value() == "方案确认"
+            assert page.locator('#entityDialog [name="owner"]').input_value() == "项目负责人"
+            assert page.locator("#entityMilestoneActions").is_visible()
+            assert page.locator("#entityMilestoneActions").get_by_role("button", name="上移里程碑", exact=True).is_disabled()
+            page.locator("#entityDialog").get_by_role("button", name="取消", exact=True).click()
+            settle()
 
             def add_in_milestone(mid, text, owner="Ocean", deadline=today):
                 form = page.locator(f'form.milestone-add[data-milestone-id="{mid}"]')
@@ -159,10 +214,13 @@ def main():
             assert page.locator(f'#projectDetail [data-id="{first_task["id"]}"] [data-field=owner]').input_value() == "李四"
             page.locator(f'#projectDetail [data-id="{second_task["id"]}"] input[type=checkbox]').check()
             settle()
-            assert "✓ 方案确认" in page.locator(f'section[data-milestone-id="{first}"]').inner_text()
+            assert "2/2 完成" in page.locator(f'section[data-milestone-id="{first}"]').inner_text()
             assert "当前：上线验收" in page.locator(".project-progress").inner_text()
             section = page.locator(f'section[data-milestone-id="{first}"]')
-            section.locator(".milestone-title").click()
+            assert section.locator(".milestone-toggle").get_attribute("aria-expanded") == "false"
+            section.locator(".milestone-toggle").click()
+            assert section.locator(".milestone-toggle").get_attribute("aria-expanded") == "true"
+            assert not page.locator("#entityDialog").is_visible(), "Expand toggle must not open editing"
             section.locator(f'[data-id="{first_task["id"]}"] input[type=checkbox]').uncheck()
             settle()
             assert "当前：方案确认" in page.locator(".project-progress").inner_text()
@@ -172,10 +230,57 @@ def main():
             retained_task = add_in_milestone(first, "里程碑恢复关联验证")
 
             # Reordering works; deletion preserves tasks, manual reassignment survives restore.
-            menu_action(f'section[data-milestone-id="{second}"] .milestone-actions', "上移里程碑")
+            page.locator(f'section[data-milestone-id="{second}"] .milestone-title').click()
+            milestone_dialog = page.locator("#entityDialog")
+            assert milestone_dialog.locator('[name="name"]').input_value() == "上线验收"
+            milestone_dialog.locator('[name="name"]').fill("上线验收改名草稿")
+            milestone_dialog.locator('[name="owner"]').fill("里程碑负责人")
+            milestone_dialog.locator('[name="due"]').fill("2099-10-30")
+            original_order = [m["id"] for m in sorted(server.read_data()["milestones"], key=lambda m: m["sort_order"])]
+            held_reorder = []
+            page.evaluate("window.__heldReorder = false")
+            def hold_reorder(route):
+                held_reorder.append(route)
+                page.evaluate("window.__heldReorder = true")
+            page.route("**/milestones/reorder", hold_reorder)
+            page.locator("#entityMilestoneActions").get_by_role("button", name="上移里程碑", exact=True).click()
+            page.wait_for_function("window.__heldReorder === true")
+            assert page.locator("#entityForm").get_attribute("aria-busy") == "true"
+            assert page.evaluate("Array.from(document.querySelector('#entityForm').elements).every(control => control.disabled)")
+            page.keyboard.press("Escape")
+            assert milestone_dialog.is_visible(), "Pending reorder must not discard the editing dialog"
+            held_reorder[0].fulfill(status=500, json={"error": "模拟排序失败"})
+            page.wait_for_function("mutationCount === 0 && !document.querySelector('#entityForm').hasAttribute('aria-busy')")
+            assert milestone_dialog.locator('[name="name"]').input_value() == "上线验收改名草稿"
+            assert milestone_dialog.locator('[name="owner"]').input_value() == "里程碑负责人"
+            assert milestone_dialog.locator('[name="due"]').input_value() == "2099-10-30"
+            assert "保存失败" in page.locator("#entityError").inner_text()
+            assert [m["id"] for m in sorted(server.read_data()["milestones"], key=lambda m: m["sort_order"])] == original_order
+            page.unroute("**/milestones/reorder", hold_reorder)
+            milestone_dialog.get_by_role("button", name="取消", exact=True).click()
             settle()
+            page.locator(f'section[data-milestone-id="{second}"] .milestone-title').click()
+            assert milestone_dialog.locator('[name="name"]').input_value() == "上线验收", "Cancelled draft must not persist"
+            milestone_dialog.locator('[name="name"]').fill("上线验收改名草稿")
+            milestone_dialog.locator('[name="owner"]').fill("里程碑负责人")
+            milestone_dialog.locator('[name="due"]').fill("2099-10-30")
+            page.locator("#entityMilestoneActions").get_by_role("button", name="上移里程碑", exact=True).click()
+            page.wait_for_function("mutationCount === 0 && !document.querySelector('#entityForm').hasAttribute('aria-busy')")
+            assert milestone_dialog.is_visible(), "Reorder must keep editing open"
+            assert milestone_dialog.locator('[name="name"]').input_value() == "上线验收改名草稿"
+            assert milestone_dialog.locator('[name="owner"]').input_value() == "里程碑负责人"
+            assert milestone_dialog.locator('[name="due"]').input_value() == "2099-10-30"
+            stored_milestone = next(m for m in server.read_data()["milestones"] if m["id"] == second)
+            assert stored_milestone["name"] == "上线验收", "Reorder must not save draft edits"
+            save_entity("上线验收已更新")
+            stored_milestone = next(m for m in server.read_data()["milestones"] if m["id"] == second)
+            assert stored_milestone["name"] == "上线验收已更新"
+            assert stored_milestone["owner"] == "里程碑负责人"
+            assert stored_milestone["due"] == "2099-10-30"
             assert page.locator("section.milestone[data-milestone-id]").first.get_attribute("data-milestone-id") == second
-            menu_action(f'section[data-milestone-id="{first}"] .milestone-actions', "删除")
+            page.locator(f'section[data-milestone-id="{first}"] .milestone-title').click()
+            page.locator("#entityMilestoneActions").get_by_role("button", name="删除", exact=True).click()
+            page.locator("#entityDialog").wait_for(state="hidden")
             settle()
             assert page.locator('.milestone:not([data-milestone-id])').count() == 1, "Deleting a populated milestone must restore the pending area"
             assert "待安排" in page.locator('.milestone:not([data-milestone-id]) .milestone-title').inner_text()
@@ -194,21 +299,24 @@ def main():
             assert task_named(retained_task["text"])["milestone_id"] == first
 
             menu_action(".project-actions", "编辑")
-            save_entity("体验优化项目已修改")
-            page.locator("#projectSearch").fill("项目负责人")
-            assert page.locator(".project-item").count() == 1
-            page.locator("#projectSearch").fill("不存在")
-            assert page.locator(".project-item").count() == 0
-            page.locator("#projectSearch").fill("")
-            settle()
+            save_entity("体验优化项目已修改", "项目负责人已修改")
+            assert server.read_data()["projects"][0]["name"] == "体验优化项目已修改"
+            assert server.read_data()["projects"][0]["owner"] == "项目负责人已修改"
+            assert "体验优化项目已修改" in page.locator("#projectDetail .project-heading h2").inner_text()
+            assert page.locator("#projectSearch").count() == 0
             menu_action(".project-actions", "归档")
             settle()
-            assert page.locator('[data-filter="archived"]').get_attribute("aria-pressed") == "true"
-            menu_action(".project-actions", "恢复跟进")
-            settle()
+            assert server.read_data()["projects"][0]["archived"] is True
+            assert page.locator(".project-item").count() == 0, "Archived projects must leave the active list"
+            assert page.locator(".project-filters, [data-filter]").count() == 0
+            assert_project_create_reachable()
+            restore_hidden_project(project_id, "已归档", fail_once=True)
+            assert server.read_data()["projects"][0]["archived"] is False
             menu_action(".project-actions", "删除")
             settle()
-            assert "回收站" in page.locator("#projectDetail").inner_text()
+            assert server.read_data()["projects"][0]["deleted_at"]
+            assert page.locator(".project-item").count() == 0, "Deleted projects must leave the active list"
+            assert_project_create_reachable()
             page.locator("#thingsTab").click()
             row = page.locator(f'#groups [data-id="{first_task["id"]}"]')
             assert row.locator(".association").input_value().startswith("retained:")
@@ -217,8 +325,7 @@ def main():
             settle()
             assert not task_named(first_task["text"]).get("deleted_at")
             page.locator("#projectsTab").click()
-            page.get_by_role("button", name="恢复项目", exact=True).click()
-            settle()
+            restore_hidden_project(project_id, "已删除")
             assert task_named(first_task["text"])["milestone_id"] is None
             assert task_named(first_task["text"])["project_id"] is None
             assert task_named(later_task["text"])["milestone_id"] == second
@@ -289,17 +396,52 @@ def main():
             settle()
 
             # Minimum native window width, both views; refresh persistence.
-            for width in (1100, 920):
+            for width in (1100, 1013, 920):
                 page.set_viewport_size({"width": width, "height": 850})
                 for tab in ("things", "projects"):
                     page.locator(f"#{tab}Tab").click()
                     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"{tab} overflow at {width}"
+                    if tab == "things":
+                        fields = [page.locator(selector).bounding_box() for selector in ('#newText', '#newOwner', '#newDeadline')]
+                        assert all(fields), "Common add fields must remain visible"
+                        for left, right in zip(fields, fields[1:]):
+                            overlap_x = min(left['x'] + left['width'], right['x'] + right['width']) - max(left['x'], right['x'])
+                            overlap_y = min(left['y'] + left['height'], right['y'] + right['height']) - max(left['y'], right['y'])
+                            assert overlap_x <= 0 or overlap_y <= 0, f"Common fields overlap at {width}px"
             page.set_viewport_size({"width": 1100, "height": 850})
             page.reload()
             page.locator("#projectDetail .project-heading").wait_for()
             assert "体验优化项目已修改" in page.locator("#projectDetail").inner_text()
+            assert page.locator(".project-owner, .milestone-actions, .milestone-section-heading").count() == 0
+            assert "上线验收已更新" in page.locator("#projectDetail").inner_text()
             page.locator("#thingsTab").click()
             page.screenshot(path=str(output / f"things-{engine}.png"), full_page=True)
+            # Optional add fields stay available under More and retain selections when collapsed.
+            assert page.locator('.inline-task .planned-date').count() == 0
+            page.locator('#newTaskMore').click()
+            assert page.locator('#newTaskMore').get_attribute('aria-expanded') == 'true'
+            assert page.locator('#newTaskOptions').is_visible()
+            association_choice = json.dumps([project_id, second], separators=(',', ':'))
+            page.locator('#newPri').select_option('P0')
+            page.locator('#newTag').select_option('personal')
+            page.locator('#newAssociation').select_option(association_choice)
+            page.locator('#newTaskMore').click()
+            assert page.locator('#newTaskMore').get_attribute('aria-expanded') == 'false'
+            assert page.locator('#newTaskOptions').is_hidden()
+            assert page.locator('#newPri').input_value() == 'P0'
+            assert page.locator('#newTag').input_value() == 'personal'
+            assert page.locator('#newAssociation').input_value() == association_choice
+            page.locator('#newText').fill('更多选项保留验证')
+            page.locator('#newOwner').fill('选项负责人')
+            page.locator('#newDeadline').fill('2099-12-31')
+            page.locator('#addBtn').click()
+            settle()
+            optional_task = task_named('更多选项保留验证')
+            assert (optional_task['priority'], optional_task['tag'], optional_task['project_id'], optional_task['milestone_id']) == ('P0', 'personal', project_id, second)
+            assert optional_task['owner'] == '选项负责人' and optional_task['deadline'] == '2099-12-31'
+            assert not optional_task.get('due'), 'Deadline must not create a legacy scheduled start'
+            assert page.locator(f'#groups [data-id="{optional_task["id"]}"]').count() == 1
+
             # A date rollover invalidates rendering even when the data revision does not change.
             midnight_fixture = {"revision": "unchanged-midnight", "updated": "2026-10-15T15:00:00Z",
                                 "projects": [], "milestones": [], "tasks": [
@@ -326,7 +468,7 @@ def main():
             assert page.locator('#groups [data-id="midnight-done"]').count() == 0
             assert page.locator('#groups [data-id="midnight-due"] .date-status').inner_text() == "逾期"
             assert not errors, errors
-            print(f"PASS {engine}: compact project empty states/core-summary visibility/settings menus with Escape+outside dismissal, row editing/deadline, project CRUD/search/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 920px layout, persistence; no JS errors")
+            print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/menu creation, milestone title editing/separate toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 920/1013px layout, persistence; no JS errors")
             browser.close()
         httpd.shutdown()
 
