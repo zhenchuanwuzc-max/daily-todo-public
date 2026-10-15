@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>每日待办</title>
+<title>每日待办 · 项目跟进</title>
 <style>
   :root {
     --bg: #fbfaf7;
@@ -696,6 +696,108 @@
     border-radius: 6px; cursor: pointer; font-family: inherit;
   }
   .recur-add-form button:hover { opacity: 0.9; }
+/* Project tracking: shared, compact inline task rows. */
+[hidden] { display:none !important; }
+body { min-width:900px; padding:24px 20px; }
+.app-shell { max-width:1440px; }
+.app-titlebar,.app-toolbar { margin-left:0; }
+.app-layout { grid-template-columns:132px minmax(0,1fr); gap:20px; }
+.view-tabs { display:flex; gap:4px; margin:20px 0 12px; border-bottom:1px solid var(--line); }
+.view-tabs button { font:inherit; background:transparent; border:0; border-bottom:2px solid transparent; padding:10px 20px; color:var(--text-2); cursor:pointer; }
+.view-tabs button[aria-selected=true] { border-bottom-color:var(--accent); color:var(--accent); font-weight:600; }
+.save-status { min-height:22px; padding:2px 0; font-size:12px; color:var(--muted); }
+.save-status.error { color:#b42318; }
+.core-summary { display:flex; gap:10px; flex-wrap:wrap; }
+.core-summary:empty { display:none; }
+.core-summary button { border:1px solid #d4e7e0; background:#f1f7f4; border-radius:8px; padding:9px 12px; cursor:pointer; text-align:left; font:inherit; color:var(--text-2); font-size:12px; }
+.core-summary b { color:var(--accent); margin-right:8px; }
+.core-summary .overdue-text { color:#b42318; margin-left:8px; }
+.add input { font:inherit; color:var(--text); background:transparent; border:0; outline:0; min-width:0; padding:5px 2px; }
+.add #newText { flex:1; min-width:150px; }
+.add .owner-input { flex:0 0 75px; width:75px; }
+.add .deadline-input { width:130px; flex:0 0 130px; font-size:12px; color:var(--text-2); }
+.add .association { width:140px; }
+.inline-task { flex-wrap:nowrap; min-height:48px; gap:7px !important; }
+.inline-task .text { flex:1 1 auto; min-width:80px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:5px 2px; border:1px solid transparent; border-radius:4px; }
+.inline-task .text:focus { outline:0; border-color:#b5d6ce; background:var(--surface); text-overflow:clip; }
+.inline-task .owner-input { flex:0 0 66px; width:66px; }
+.inline-task .deadline-wrap { flex:0 0 160px; position:relative; display:flex; align-items:center; gap:3px; }
+.inline-task .date-status { font-size:10px; color:var(--accent); white-space:nowrap; }
+.inline-task .overdue .date-status { color:#b42318; }
+.inline-task .deadline-input { width:128px; }
+.inline-task .deadline-wrap.empty-date input:not(:focus) { color:transparent; }
+.inline-task .deadline-wrap.empty-date::after { content:'未设截止'; pointer-events:none; position:absolute; left:5px; top:7px; color:var(--muted); font-size:11px; }
+.inline-task .deadline-wrap:focus-within::after { display:none; }
+.inline-task .deadline-wrap.overdue input { color:#b42318; background:#fdf0ed; }
+.inline-task .deadline-wrap.due-today input { color:var(--accent); background:#edf6f2; }
+.inline-task input:not([type=checkbox]),.inline-task select { font:inherit; font-size:11px; padding:6px 4px; border:1px solid transparent; border-radius:4px; background:transparent; color:var(--text-2); min-width:0; }
+.inline-task input:not([type=checkbox]):hover,.inline-task select:hover { background:var(--hover); }
+.inline-task input:not([type=checkbox]):focus,.inline-task select:focus { outline:0; border-color:#b5d6ce; background:var(--surface); }
+.inline-task .association { flex:0 1 144px; width:144px; }
+.inline-task .association[data-empty=true] { color:var(--muted); }
+.inline-task .pri-select { width:40px; flex-shrink:0; }
+.inline-task .planned-date { border:0; background:transparent; color:var(--muted); font-size:10px; width:44px; padding:4px 0; cursor:pointer; }
+.inline-task .planned-date.active { color:var(--accent); }
+.inline-task .row-delete { border:0; background:none; color:var(--muted); cursor:pointer; width:20px; font-size:17px; }
+.inline-task .row-delete:hover { color:#b42318; }
+.inline-task .text[contenteditable=true] { display:block; }
+.inline-task.done .text { color:var(--muted); }
+.inline-task .save-failed { border-color:#b42318 !important; background:#fff6f4 !important; }
+.inline-task.saving { opacity:.65; }
+.inline-task input[type=checkbox] { flex-shrink:0; accent-color:var(--accent); }
+.inline-task .drag-handle { width:18px; padding-left:0; padding-right:0; }
+#projectsView { display:grid; grid-template-columns:220px minmax(0,1fr); gap:28px; align-items:start; margin-top:8px; }
+.project-sidebar { position:sticky; top:20px; }
+.project-sidebar-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.project-sidebar input { width:100%; padding:8px 10px; background:var(--surface); font:inherit; border:1px solid var(--line); border-radius:6px; font-size:12px; }
+.project-filters { display:flex; gap:4px; margin:10px 0; }
+.project-filters button { flex:1; font-size:11px; padding:6px 0; background:transparent; border:0; border-radius:4px; color:var(--text-2); cursor:pointer; }
+.project-filters button[aria-pressed=true] { background:#eaf3f0; color:var(--accent); }
+.project-item { display:block; border:1px solid transparent; border-radius:7px; width:100%; padding:11px 10px; margin-bottom:4px; background:transparent; text-align:left; cursor:pointer; font:inherit; }
+.project-item strong { display:block; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.project-item small { display:block; margin-top:5px; color:var(--muted); font-size:11px; }
+.project-item[aria-current=true] { background:#eaf3f0; border-color:#d4e7e0; color:var(--accent); }
+.project-item:hover { background:var(--hover); }
+.project-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px; }
+.project-heading h2 { font-size:19px; margin-bottom:7px; }
+.project-heading p { color:var(--text-2); line-height:1.6; white-space:pre-wrap; }
+.project-owner { color:var(--muted); font-size:12px; margin-top:5px; }
+.project-actions { display:flex; gap:6px; white-space:nowrap; }
+.project-actions button,.milestone-actions button,.subtle-button,.dialog-actions button,.project-sidebar-head button { border:1px solid var(--line); background:var(--surface); color:var(--text-2); font-family:inherit; border-radius:5px; padding:6px 9px; cursor:pointer; font-size:12px; }
+button.primary { background:var(--accent); border-color:var(--accent); color:white; }
+button.danger { color:#b42318; }
+button:disabled { cursor:default; opacity:.5; }
+.project-progress { display:flex; gap:12px; padding:12px; border-radius:7px; background:#f1f4ef; font-size:12px; color:var(--text-2); margin-bottom:20px; line-height:1.7; flex-wrap:wrap; }
+.project-progress b { color:var(--text); }
+.milestone { margin-bottom:18px; }
+.milestone-head { display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line); padding:10px 0; }
+.milestone-title { border:0; background:none; text-align:left; font:inherit; font-weight:600; color:var(--text); cursor:pointer; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.milestone-meta { color:var(--muted); font-size:11px; white-space:nowrap; }
+.milestone-actions { display:flex; gap:3px; margin-left:auto; }
+.milestone-actions button { border:0; background:transparent; padding:4px; font-size:11px; }
+.milestone-add { display:flex; align-items:center; gap:8px; padding:10px 2px; }
+.milestone-add input { padding:6px 5px; border:1px solid var(--line); border-radius:5px; background:var(--surface); font:inherit; font-size:12px; min-width:0; }
+.milestone-add input[name=text] { flex:1; }
+.milestone-add input[name=owner] { width:72px; }
+.milestone-add input[name=deadline] { width:132px; }
+.milestone-add button { flex-shrink:0; }
+.milestone.empty .milestone-meta { color:#a46b18; }
+.project-empty { padding:64px 18px; color:var(--muted); text-align:center; line-height:1.9; }
+.project-hint { color:var(--muted); font-size:12px; padding:8px 0; }
+.deleted-milestones { margin-top:20px; padding-top:12px; border-top:1px solid var(--line); }
+.deleted-milestones summary { color:var(--muted); font-size:12px; cursor:pointer; }
+.deleted-milestone { display:flex; justify-content:space-between; padding:8px 0; align-items:center; color:var(--text-2); font-size:12px; }
+#entityDialog { width:420px; max-width:90vw; border:1px solid var(--line); border-radius:12px; margin:auto; padding:24px; color:var(--text); background:var(--surface); }
+#entityDialog::backdrop { background:rgba(25,35,30,.2); }
+#entityForm h2 { font-size:18px; margin-bottom:20px; }
+#entityForm label { display:block; margin:12px 0; font-size:12px; color:var(--text-2); }
+#entityForm label>input:not([type=checkbox]),#entityForm textarea { display:block; width:100%; margin-top:6px; padding:9px; border:1px solid var(--line); border-radius:6px; font:inherit; color:var(--text); background:var(--bg); }
+#entityForm .check-label { display:flex; align-items:center; gap:6px; }
+#entityForm #entityError { color:#b42318; font-size:12px; min-height:16px; }
+.dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+@media(max-width:1150px) { .app-layout{grid-template-columns:105px minmax(0,1fr);gap:12px;} #projectsView{grid-template-columns:180px minmax(0,1fr);gap:16px;} .inline-task .association{flex-basis:104px;width:104px;} .add .association{width:110px;} .inline-task .owner-input{width:56px;flex-basis:56px;} }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; transition:none !important; } }
+
 </style>
 </head>
 <body>
@@ -710,6 +812,12 @@
     </div>
   </header>
 </div>
+<div class="view-tabs" role="tablist" aria-label="跟进视图">
+  <button id="thingsTab" role="tab" aria-controls="thingsView" aria-selected="true" data-tab="things">事情跟进</button>
+  <button id="projectsTab" role="tab" aria-controls="projectsView" aria-selected="false" data-tab="projects">项目跟进</button>
+</div>
+<div id="coreSummary" class="core-summary" aria-label="核心项目进展"></div>
+<div id="saveStatus" class="save-status" role="status" aria-live="polite"></div>
 <div class="app-toolbar">
 
   <div class="update-banner" id="updateBanner">
@@ -719,25 +827,18 @@
     <button class="ub-close" id="updateDismiss" title="忽略">×</button>
   </div>
 
-  <div class="add">
-    <textarea id="newText" rows="1" placeholder="加一件事，回车换行，点「添加」提交…" autofocus></textarea>
-    <select id="newPri" title="优先级">
-      <option value="P0">P0</option>
-      <option value="P1" selected>P1</option>
-      <option value="P2">P2</option>
-      <option value="P3">P3</option>
-    </select>
-    <select id="newTag" title="分类">
-      <option value="work">work</option>
-      <option value="startup">startup</option>
-      <option value="personal">personal</option>
-    </select>
-    <button class="due-btn" id="newDueBtn" title="计划完成日（默认今天，最多 30 天后）">今天</button>
-    <button id="addBtn">添加</button>
-  </div>
+  <form class="add" id="newTaskForm">
+    <input id="newText" type="text" placeholder="添加一件事…" aria-label="事项名称" required autocomplete="off">
+    <input id="newOwner" class="owner-input" value="Ocean" placeholder="负责人" aria-label="负责人" required>
+    <input id="newDeadline" class="deadline-input" type="date" aria-label="截止日期" title="截止日期（必填）" required>
+    <select id="newPri" title="优先级"><option>P0</option><option selected>P1</option><option>P2</option><option>P3</option></select>
+    <select id="newTag" title="分类"><option>work</option><option>startup</option><option>personal</option></select>
+    <select id="newAssociation" class="association" aria-label="所属项目和里程碑"><option value="">不关联项目</option></select>
+    <button id="addBtn" type="submit">添加</button>
+  </form>
 
 </div>
-<div class="app-layout">
+<div class="app-layout" id="thingsView" role="tabpanel" aria-labelledby="thingsTab">
   <nav class="priority-nav" aria-label="待办优先级导航">
     <div class="priority-nav-title">优先级概览</div>
     <div class="priority-nav-items" id="priorityNav"></div>
@@ -748,7 +849,30 @@
   <footer><span id="meta">—</span></footer>
 </div>
 </div>
+<section id="projectsView" role="tabpanel" aria-labelledby="projectsTab" hidden>
+  <aside class="project-sidebar">
+    <div class="project-sidebar-head"><strong>项目</strong><button id="newProjectBtn" class="primary">＋ 项目</button></div>
+    <input id="projectSearch" type="search" placeholder="搜索项目或负责人" aria-label="搜索项目或负责人">
+    <div class="project-filters" aria-label="项目状态">
+      <button data-filter="active" aria-pressed="true">进行中</button><button data-filter="archived" aria-pressed="false">已归档</button><button data-filter="trash" aria-pressed="false">回收站</button>
+    </div>
+    <div id="projectList"></div>
+  </aside>
+  <main id="projectDetail"></main>
+</section>
 </div>
+<dialog id="entityDialog">
+  <form id="entityForm">
+    <h2 id="entityTitle"></h2>
+    <label>名称<input name="name" required maxlength="200" autocomplete="off"></label>
+    <label>负责人<input name="owner" required autocomplete="off"></label>
+    <label id="entityGoalLabel">目标（可选）<textarea name="goal" rows="2"></textarea></label>
+    <label id="entityDueLabel">目标日期（可选）<input name="due" type="date"></label>
+    <label id="entityCoreLabel" class="check-label"><input name="core" type="checkbox"> 核心项目</label>
+    <p id="entityError" role="alert"></p>
+    <div class="dialog-actions"><button type="button" id="entityCancel">取消</button><button type="submit" class="primary">保存</button></div>
+  </form>
+</dialog>
 
 <div class="toast" id="toast">
   <span class="toast-text" id="toastText"></span>
@@ -785,7 +909,7 @@
 </div>
 
 <script>
-let state = { tasks: [] };
+let state = { tasks: [], projects: [], milestones: [] };
 let lastUpdated = "";
 let dirty = false;
 let taskDrag = null;
@@ -888,33 +1012,12 @@ function compareTaskOrder(a, b) {
   // Newly added tasks stay visible at the top until explicitly arranged.
   if (aOrdered !== bOrdered) return aOrdered ? 1 : -1;
   if (aOrdered && a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
-  return (b.created || "").localeCompare(a.created || "");
+  return timestampValue(b.created) - timestampValue(a.created);
 }
 
 async function persistTaskOrder(ul) {
   const ids = Array.from(ul.children, row => row.dataset.id);
-  dirty = true;
-  document.body.inert = true;
-  try {
-    const r = await fetch("/todos/reorder", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids })
-    });
-    const result = await r.json();
-    if (!r.ok || !result.ok) throw new Error(result.error || "保存失败");
-    ids.forEach((id, position) => {
-      const task = state.tasks.find(t => t.id === id);
-      if (task) task.sort_order = position;
-    });
-  } catch (e) {
-    alert("排序未保存：" + e.message + "。请重试。");
-  } finally {
-    lastUpdated = "";
-    dirty = false;
-    document.body.inert = false;
-    render();
-    await load();
-  }
+  await mutate('/todos/reorder', 'POST', {ids});
 }
 
 function addDragHandle(li) {
@@ -930,7 +1033,7 @@ function addDragHandle(li) {
     const ul = li.parentElement;
     const box = li.getBoundingClientRect();
     const preview = li.cloneNode(true);
-    preview.className = "task-drag-preview";
+    preview.className = "task-drag-preview inline-task";
     preview.removeAttribute("data-id");
     preview.setAttribute("aria-hidden", "true");
     preview.inert = true;
@@ -989,7 +1092,7 @@ function addDragHandle(li) {
     const landing = drag.preview.animate([
       { transform: drag.preview.style.transform || "none", opacity: 0.97 },
       { transform: `translate(${target.left - drag.box.left}px, ${target.top - drag.box.top}px)`, opacity: 0 }
-    ], { duration: 140, easing: "ease-out", fill: "forwards" });
+    ], { duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 140, easing: "ease-out", fill: "forwards" });
     landing.finished.finally(() => drag.preview.remove());
     const changed = drag.original.some((row, i) => drag.ul.children[i] !== row);
     if (changed) persistTaskOrder(drag.ul);
@@ -1045,138 +1148,47 @@ const PRI_LABEL = {
 };
 
 function pad2(n) { return String(n).padStart(2, "0"); }
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+// UTC/offset timestamps are displayed in Beijing; legacy naive timestamps already mean Beijing.
+function timestampDate(value) {
+  if (!value) return null;
+  const raw = String(value).replace(' ', 'T');
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw + 'T00:00:00+08:00'
+    : /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : raw + '+08:00';
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
+function timestampValue(value) { return timestampDate(value)?.getTime() || 0; }
+function localDateKey(value) {
+  const d = value instanceof Date ? value : timestampDate(value);
+  if (!d || Number.isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);
+  const part = type => parts.find(p => p.type === type).value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+function localTime(value) {
+  const d = value instanceof Date ? value : timestampDate(value);
+  return d ? new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Shanghai',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(d) : '';
+}
+function todayStr() { return localDateKey(new Date()); }
+// Calendar-only Date objects carry the chosen calendar day, independent of the browser's time zone.
+function calendarDate(key = todayStr()) {
+  const [year,month,day] = key.split('-').map(Number);
+  return new Date(year, month-1, day, 12, 0, 0);
+}
+function calendarKey(d) { return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
 function dateStrOffset(days) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const d = calendarDate(); d.setDate(d.getDate()+days); return calendarKey(d);
 }
-
 function fmtTime(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  const now = new Date();
-  const sameDay = d.getFullYear() === now.getFullYear() &&
-                  d.getMonth() === now.getMonth() &&
-                  d.getDate() === now.getDate();
-  const pad = n => String(n).padStart(2, "0");
-  if (sameDay) return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  return `${d.getMonth() + 1}-${pad(d.getDate())}`;
+  const date = localDateKey(iso);
+  return !date ? '' : date === todayStr() ? localTime(iso) : date.slice(5);
 }
 function fmtFull(iso) {
-  if (!iso) return "";
-  return iso.replace("T", " ").slice(0, 16);
+  const date = localDateKey(iso);
+  return date ? date + ' ' + localTime(iso) : '';
 }
 
-function renderTask(t) {
-  const li = document.createElement("li");
-  const cls = [];
-  if (t.done) cls.push("done");
-  if (t.auto_skipped) cls.push("auto-skipped");
-  li.className = cls.join(" ");
-  li.dataset.id = t.id;
-
-  // 左侧主控件：普通行 = 完成 checkbox；建议行 = ✓采纳（建议只能采纳/拒绝，不能"完成"）
-  const isSuggest = t.source === "claude-suggest";
-  if (isSuggest) li.classList.add("suggest");
-  let lead;
-  if (isSuggest) {
-    lead = document.createElement("button");
-    lead.className = "accept-lead"; lead.textContent = "✓ 采纳";
-    lead.title = "采纳：转为正式待办，移出建议区";
-    lead.addEventListener("click", () => acceptSuggest(t.id));
-  } else {
-    lead = document.createElement("input");
-    lead.type = "checkbox"; lead.checked = !!t.done;
-    lead.addEventListener("change", () => toggleTask(t.id, lead.checked));
-  }
-
-  const txt = document.createElement("div");
-  txt.className = "text"; txt.textContent = t.text;
-  txt.contentEditable = "true";
-  txt.addEventListener("blur", () => editTask(t.id, txt.textContent.trim()));
-
-  // note 背景说明（claude-suggest 建议常驻显示）
-  let txtNode = txt;
-  if (t.note) {
-    const wrap = document.createElement("div");
-    wrap.className = "text-wrap";
-    const noteDiv = document.createElement("div");
-    noteDiv.className = "note";
-    noteDiv.textContent = t.note;
-    wrap.append(txt, noteDiv);
-    txtNode = wrap;
-  }
-
-  // 右侧元数据：tag · 时间
-  const meta = document.createElement("span");
-  meta.className = "meta-cell";
-  const parts = [];
-  if (t.tag) parts.push(t.tag);
-  if (t.auto_skipped) {
-    const md = (t.skipped_for || "").slice(5).replace("-", "/");
-    parts.push(`⏭ ${md || ""} 未做`.replace(/\s+/g, " ").trim());
-    meta.title = `原本：${t.skipped_for || "—"} 未完成\n自动跳过：${fmtFull(t.done_at)}`;
-  } else if (t.done && t.done_at) {
-    parts.push("完 " + fmtTime(t.done_at));
-    meta.title = `添加：${fmtFull(t.created)}\n完成：${fmtFull(t.done_at)}`;
-  } else if (t.created) {
-    parts.push("加 " + fmtTime(t.created));
-    meta.title = `添加：${fmtFull(t.created)}`;
-  }
-  meta.innerHTML = parts.map((p, i) =>
-    i === 0 ? `<span>${p}</span>` : `<span class="sep">·</span><span>${p}</span>`
-  ).join("");
-
-  // 右侧工具栏
-  const actions = document.createElement("span");
-  actions.className = "actions";
-
-  if (isSuggest) {
-    // 建议行：与左侧「✓采纳」配对的「✕拒绝」(= 从建议区删除)，始终可见
-    const rej = document.createElement("button");
-    rej.className = "del reject"; rej.textContent = "✕ 拒绝";
-    rej.title = "拒绝：从建议区删除";
-    rej.addEventListener("click", () => deleteTask(t.id));
-    actions.append(rej);
-  } else {
-    const priSel = document.createElement("select");
-    priSel.className = "pri-select " + (t.priority || "PN");
-    priSel.title = "改优先级";
-    [["P0","P0"],["P1","P1"],["P2","P2"],["P3","P3"],["","—"]].forEach(([v, label]) => {
-      const o = document.createElement("option");
-      o.value = v; o.textContent = label;
-      if ((t.priority || "") === v) o.selected = true;
-      priSel.appendChild(o);
-    });
-    priSel.addEventListener("change", () => setPriority(t.id, priSel.value || null));
-    priSel.addEventListener("click", (e) => e.stopPropagation());
-
-    const dueBtn = document.createElement("button");
-    dueBtn.className = "due-btn due-btn-sm";
-    dueBtn.textContent = fmtDueShort(t.due || "");
-    if (t.due) dueBtn.classList.add("active");
-    dueBtn.title = "改计划日";
-    dueBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openDatePicker(dueBtn, t.due || "", (v) => setDue(t.id, v));
-    });
-
-    const del = document.createElement("button");
-    del.className = "del"; del.textContent = "×";
-    del.title = "删除";
-    del.addEventListener("click", () => deleteTask(t.id));
-
-    actions.append(priSel, dueBtn, del);
-  }
-
-  li.append(lead, txtNode, actions, meta);
-  return li;
-}
+// Shared inline task rows are defined below.
 
 function renderGroup(key, label, labelCn, tasks, collapsible = false) {
   if (tasks.length === 0) return null;
@@ -1230,8 +1242,9 @@ function render() {
   // 重复任务种子 = 模板，不在主列表显示，只在「重复任务」区块管理
   const buckets = { suggest: [], P0: [], P1: [], P2: [], P3: [], PN: [], done: [], future: [] };
   for (const t of state.tasks) {
+    if (t.deleted_at) continue;
     if (isRecurringSeed(t)) continue;
-    if (t.done) { if (t.done_at && t.done_at.slice(0,10) === today) buckets.done.push(t); continue; }
+    if (t.done) { if (t.done_at && localDateKey(t.done_at) === today) buckets.done.push(t); continue; }
     if (t.source === "claude-suggest") { buckets.suggest.push(t); continue; }  // Claude 建议隔离区，待 Ocean 审
     if (t.due && t.due > today) { buckets.future.push(t); continue; }
     if (PRI_ORDER.includes(t.priority)) buckets[t.priority].push(t);
@@ -1240,8 +1253,8 @@ function render() {
   for (const k of ["P0","P1","P2","P3","PN"]) {
     buckets[k].sort(compareTaskOrder);
   }
-  buckets.suggest.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
-  buckets.done.sort((a, b) => (b.done_at || "").localeCompare(a.done_at || ""));
+  buckets.suggest.sort((a, b) => timestampValue(b.created) - timestampValue(a.created));
+  buckets.done.sort((a, b) => timestampValue(b.done_at) - timestampValue(a.done_at));
 
   if (buckets.suggest.length) {
     const g = renderGroup("SG", "💡", "Claude 建议", buckets.suggest);
@@ -1286,117 +1299,7 @@ function render() {
   }
 }
 
-async function load() {
-  if (dirty || taskDrag) return;
-  try {
-    const r = await fetch("/todos", { cache: "no-store" });
-    const data = await r.json();
-    if (dirty || taskDrag) return;
-    if (data.updated !== lastUpdated) {
-      state = data; lastUpdated = data.updated; render();
-    }
-  } catch (e) { console.warn("load failed", e); }
-}
-
-async function save() {
-  dirty = true;
-  try {
-    const r = await fetch("/todos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(state)
-    });
-    const j = await r.json();
-    lastUpdated = j.updated || lastUpdated;
-    state.updated = lastUpdated;
-  } catch (e) { console.warn("save failed", e); }
-  finally { dirty = false; render(); }
-}
-
-function genId() { return "t" + Date.now() + Math.floor(Math.random() * 1000); }
-
-function addTask(text, tag, priority, due) {
-  if (!text) return;
-  const t = {
-    id: genId(), text, done: false,
-    created: new Date().toISOString().slice(0, 19),
-    done_at: null, source: "user", tag: tag || "work",
-    priority: priority || "P1"
-  };
-  if (due && due > todayStr()) t.due = due;  // 仅未来日存 due，今天/无 = 直接进主列表
-  state.tasks.push(t);
-  save();
-}
-function setPriority(id, p) {
-  const t = state.tasks.find(x => x.id === id);
-  if (!t) return;
-  t.priority = p || null;
-  save();
-}
-function setDue(id, due) {
-  const t = state.tasks.find(x => x.id === id);
-  if (!t) return;
-  if (!due || due <= todayStr()) delete t.due;
-  else t.due = due;
-  save();
-}
-function toggleTask(id, done) {
-  const t = state.tasks.find(x => x.id === id);
-  if (!t) return;
-  t.done = done;
-  t.done_at = done ? new Date().toISOString().slice(0, 19) : null;
-  save();
-}
-function editTask(id, text) {
-  const t = state.tasks.find(x => x.id === id);
-  if (!t || !text || text === t.text) return;
-  t.text = text; save();
-}
-function deleteTask(id) {
-  state.tasks = state.tasks.filter(x => x.id !== id);
-  save();
-}
-function acceptSuggest(id) {
-  const t = state.tasks.find(x => x.id === id);
-  if (!t) return;
-  t.source = "claude";  // 转正：建议 → 正式待办，移出建议组
-  save();
-}
-
-const newTextEl = document.getElementById("newText");
-function resizeNewText() {
-  newTextEl.style.height = "auto";
-  newTextEl.style.height = Math.min(newTextEl.scrollHeight, 160) + "px";
-}
-newTextEl.addEventListener("input", resizeNewText);
-resizeNewText();
-
-let newDueValue = "";  // "" = 今天/无；非空 = "YYYY-MM-DD" 未来
-const newDueBtn = document.getElementById("newDueBtn");
-function refreshNewDueBtn() {
-  newDueBtn.textContent = fmtDueShort(newDueValue);
-  newDueBtn.classList.toggle("active", !!newDueValue);
-}
-refreshNewDueBtn();
-newDueBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  openDatePicker(newDueBtn, newDueValue, (v) => {
-    newDueValue = v || "";
-    refreshNewDueBtn();
-  });
-});
-
-document.getElementById("addBtn").addEventListener("click", () => {
-  const tag = document.getElementById("newTag").value;
-  const pri = document.getElementById("newPri").value;
-  addTask(newTextEl.value.trim(), tag, pri, newDueValue);
-  newTextEl.value = "";
-  newDueValue = ""; refreshNewDueBtn();
-  resizeNewText(); newTextEl.focus();
-});
-
-load();
-setInterval(load, 5000);
+// Scoped mutations and initialization are defined below.
 
 // ============== 手动同步（拉取其他设备最新改动 + 刷新列表）==============
 async function manualRefresh() {
@@ -1461,6 +1364,10 @@ async function checkUpdate(verbose = false) {
     data = await r.json();
   } catch (e) {
     if (verbose) showToast("❌ 检查失败：server 无响应");
+    return;
+  }
+  if (data.branch_build) {
+    if (verbose) showToast(data.message || "当前为项目跟进分支版", 4000);
     return;
   }
   if (data.error) {
@@ -1585,16 +1492,15 @@ function isSameDay(a, b) {
          a.getDate() === b.getDate();
 }
 function earliestMonday() {
-  const dates = state.tasks.map(t => t.created).filter(Boolean).sort();
-  if (!dates.length) return getMonday(new Date());
-  return getMonday(new Date(dates[0]));
+  const dates = state.tasks.filter(t => !t.deleted_at).map(t => t.created).filter(Boolean).sort((a,b) => timestampValue(a) - timestampValue(b));
+  if (!dates.length) return getMonday(calendarDate());
+  return getMonday(calendarDate(localDateKey(dates[0])));
 }
 
 function tasksOnDate(d) {
   return state.tasks.filter(t => {
-    if (!t.done || !t.done_at) return false;
-    const td = new Date(t.done_at);
-    return isSameDay(td, d);
+    if (t.deleted_at || !t.done || !t.done_at) return false;
+    return localDateKey(t.done_at) === calendarKey(d);
   });
 }
 
@@ -1607,8 +1513,8 @@ function heatLevel(n) {
 }
 
 function renderReview() {
-  if (!viewWeekStart) viewWeekStart = getMonday(new Date());
-  const today = new Date(); today.setHours(0,0,0,0);
+  if (!viewWeekStart) viewWeekStart = getMonday(calendarDate());
+  const today = calendarDate(); today.setHours(0,0,0,0);
   const thisWeek = getMonday(today);
   const earliest = earliestMonday();
 
@@ -1650,8 +1556,8 @@ function renderReview() {
       body = `<div class="empty-hint">（无）</div>`;
     } else {
       const lis = tasks.map(t => {
-        const time = t.done_at ? t.done_at.slice(11, 16) : "";
-        const pri = t.priority ? `<span class="task-pri ${t.priority}">${t.priority}</span>` : "";
+        const time = localTime(t.done_at);
+        const pri = t.priority ? `<span class="task-pri ${escapeHtml(t.priority)}">${escapeHtml(t.priority)}</span>` : "";
         return `<li>
           <span class="check">✓</span>
           ${pri}
@@ -1688,7 +1594,7 @@ function escapeHtml(s) {
 }
 
 function openReview() {
-  viewWeekStart = getMonday(new Date());
+  viewWeekStart = getMonday(calendarDate());
   renderReview();
   document.getElementById("reviewModal").classList.add("show");
 }
@@ -1708,13 +1614,13 @@ document.getElementById("weekPrev").addEventListener("click", () => {
 });
 document.getElementById("weekNext").addEventListener("click", () => {
   if (!viewWeekStart) return;
-  const thisWeek = getMonday(new Date());
+  const thisWeek = getMonday(calendarDate());
   const next = new Date(viewWeekStart);
   next.setDate(next.getDate() + 7);
   if (next <= thisWeek) { viewWeekStart = next; renderReview(); }
 });
 document.getElementById("weekThis").addEventListener("click", () => {
-  viewWeekStart = getMonday(new Date());
+  viewWeekStart = getMonday(calendarDate());
   renderReview();
 });
 // ============== 自定义日期选择器 ==============
@@ -1884,7 +1790,7 @@ function scheduleLabel(seed) {
 }
 
 function renderRecurSection() {
-  const seeds = state.tasks.filter(isRecurringSeed);
+  const seeds = state.tasks.filter(t => !t.deleted_at && isRecurringSeed(t));
   seeds.sort((a, b) => (a.created || "").localeCompare(b.created || ""));
 
   let html = `
@@ -1900,13 +1806,13 @@ function renderRecurSection() {
   } else {
     for (const s of seeds) {
       html += `
-        <li class="recur-seed" data-id="${s.id}">
+        <li class="recur-seed" data-id="${escapeHtml(s.id)}">
           <span class="rs-icon">🔁</span>
           <span class="rs-text">${escapeHtml(s.text)}</span>
-          <span class="rs-schedule">${scheduleLabel(s)}</span>
-          <span class="rs-pri">${s.priority || "P1"}</span>
-          <span class="rs-tag">${s.tag || "personal"}</span>
-          <button class="rs-del" data-action="del-seed" data-id="${s.id}" title="删除（历史实例保留）">×</button>
+          <span class="rs-schedule">${escapeHtml(scheduleLabel(s))}</span>
+          <span class="rs-pri">${escapeHtml(s.priority || "P1")}</span>
+          <span class="rs-tag">${escapeHtml(s.tag || "personal")}</span>
+          <button class="rs-del" data-action="del-seed" data-id="${escapeHtml(s.id)}" title="删除（历史实例保留）">×</button>
         </li>`;
     }
   }
@@ -1948,18 +1854,12 @@ function renderRecurSection() {
 }
 
 async function addRecurSeed(text, priority, tag, recurring, weekday, monthday) {
-  const payload = { text, priority, tag, recurring, source: "user" };
-  if (recurring === "weekly") payload.recur_weekday = Number(weekday);
-  if (recurring === "monthly") payload.recur_monthday = Number(monthday);
-  const response = await fetch("/recurring/add", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "添加重复任务失败");
-  await fetch("/ensure-recurring", { method: "POST" });
-  await load();
+  const payload = {text, priority, tag, recurring, source:'user'};
+  if (recurring === 'weekly') payload.recur_weekday = Number(weekday);
+  if (recurring === 'monthly') payload.recur_monthday = Number(monthday);
+  const ok = await mutate('/recurring/add', 'POST', payload);
+  if (!ok) throw new Error('添加重复任务失败，输入已保留');
+  await mutate('/ensure-recurring', 'POST');
 }
 
 function deleteRecurSeed(seedId) {
@@ -1970,8 +1870,7 @@ function deleteRecurSeed(seedId) {
     ? "删除重复任务模板？\n已生成的历史实例（含未完成的）会保留为普通任务。"
     : "删除重复任务模板？";
   if (!confirm(msg)) return;
-  state.tasks = state.tasks.filter(t => t.id !== seedId);
-  save();
+  mutate("/todos/" + encodeURIComponent(seedId), "DELETE");
 }
 
 function bindRecurSection(root) {
@@ -2043,12 +1942,12 @@ function bindRecurSection(root) {
 
 function renderFuture() {
   const today = todayStr();
-  const items = state.tasks.filter(t => !t.done && t.due && t.due > today);
+  const items = state.tasks.filter(t => !t.deleted_at && !t.done && t.due && t.due > today);
   items.sort((a, b) => a.due.localeCompare(b.due));
 
   const root = document.getElementById("futureList");
   root.innerHTML = "";
-  const seedCount = state.tasks.filter(isRecurringSeed).length;
+  const seedCount = state.tasks.filter(t => !t.deleted_at && isRecurringSeed(t)).length;
   const sumParts = [`${items.length} 日常`];
   if (seedCount > 0) sumParts.push(`${seedCount} 重复任务`);
   document.getElementById("futureSummary").textContent = sumParts.join(" · ");
@@ -2056,7 +1955,7 @@ function renderFuture() {
   if (items.length === 0) {
     const note = document.createElement("div");
     note.className = "future-empty";
-    note.innerHTML = '还没有未来计划项<br>添加事项时把日期选成未来即可';
+    note.innerHTML = '还没有未来计划项<br>事项行里的「计划日」控制何时进入清单，截止日期用于提醒';
     root.appendChild(note);
     // 即便没有未来项，也要在底部展示重复任务区块（管理入口）
     const recurWrap = document.createElement("div");
@@ -2110,6 +2009,429 @@ function closeFuture() {
 document.getElementById("futureBtn").addEventListener("click", openFuture);
 document.querySelectorAll('[data-close="future"]').forEach(el =>
   el.addEventListener("click", closeFuture));
+</script>
+<script>
+// One record per task; both views use the same scoped, serialized write path.
+let mutationChain = Promise.resolve();
+let mutationCount = 0;
+let readGeneration = 0;
+let renderPending = false;
+let activeTab = localStorage.getItem('tracking-tab') === 'projects' ? 'projects' : 'things';
+let selectedProject = localStorage.getItem('tracking-project') || '';
+let projectFilter = 'active';
+let dialogContext = null;
+const fieldDrafts = new Map();
+const addDrafts = new Map();
+const milestoneExpanded = new Map();
+const thingRenderer = render;
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+function btn(text, fn, cls = '') {
+  const b = el('button', cls, text); b.type = 'button'; b.addEventListener('click', fn); return b;
+}
+function status(text, error = false) {
+  const n = document.getElementById('saveStatus'); n.textContent = text; n.classList.toggle('error', error);
+}
+function isEditing() {
+  const n = document.activeElement;
+  return !!n && (n.isContentEditable || n.matches('input:not([type=checkbox]),textarea,select') || document.getElementById('entityDialog').open);
+}
+function requestRender() {
+  if (isEditing() || taskDrag || mutationCount) { renderPending = true; return; }
+  renderPending = false; render();
+}
+document.addEventListener('focusout', () => setTimeout(() => { if (renderPending) requestRender(); }, 0));
+
+async function readState(force = false) {
+  const generation = ++readGeneration;
+  const r = await fetch('/todos', {cache:'no-store'});
+  if (!r.ok) throw new Error('无法读取数据');
+  const data = await r.json();
+  if (generation !== readGeneration || (!force && mutationCount)) return;
+  const fingerprint = JSON.stringify([data.revision ?? data.updated ?? data, todayStr()]);
+  if (force || fingerprint !== lastUpdated) {
+    state = {tasks:[],projects:[],milestones:[],...data};
+    lastUpdated = fingerprint;
+    requestRender();
+  }
+}
+async function load() {
+  if (mutationCount || taskDrag || isEditing()) return;
+  try { await readState(); }
+  catch (error) { status('读取失败：' + error.message + '；稍后自动重试。', true); }
+}
+function mutate(path, method, data, success) {
+  mutationCount++; dirty = true; readGeneration++;
+  status('保存中…');
+  const run = mutationChain.then(async () => {
+    try {
+      const options = {method, headers:{'Content-Type':'application/json'}};
+      if (data !== undefined) options.body = JSON.stringify(data);
+      const r = await fetch(path, options);
+      const result = await r.json();
+      if (!r.ok || result.ok === false || result.error) throw new Error(result.error || '保存失败');
+      if (success) success(result);
+      // Reads are not writes: a failed refresh must never tell users to replay a successful add.
+      try { await readState(true); }
+      catch (_) { status('已保存，刷新暂时失败；稍后自动重试。', true); }
+      return true;
+    } catch (error) {
+      status('未保存：' + error.message + '。输入已保留，请重试。', true);
+      showToast('未保存：' + error.message, 5000);
+      return false;
+    } finally {
+      mutationCount--; dirty = mutationCount > 0;
+      if (!dirty) {
+        if (!document.getElementById('saveStatus').classList.contains('error')) status('已保存');
+        requestRender();
+      }
+    }
+  });
+  mutationChain = run.catch(() => false);
+  return run;
+}
+function patchTask(id, patch, success) { return mutate('/todos/' + encodeURIComponent(id), 'PATCH', patch, success); }
+function setPriority(id, priority) { return patchTask(id, {priority}); }
+function setDue(id, due) { return patchTask(id, {due: due && due > todayStr() ? due : null}); }
+function toggleTask(id, done) { return patchTask(id, {done}); }
+function deleteTask(id) { return mutate('/todos/' + encodeURIComponent(id), 'DELETE'); }
+function acceptSuggest(id) { return patchTask(id, {source:'claude'}); }
+
+function projectById(id) { return state.projects.find(p => p.id === id); }
+function milestoneById(id) { return state.milestones.find(m => m.id === id); }
+function normalTask(t) { return !t.deleted_at && !t.recurring && !t.recur_source && !t.auto_skipped && t.source !== 'claude-suggest'; }
+function projectTasks(p) { return state.tasks.filter(t => normalTask(t) && t.project_id === p.id); }
+function projectMilestones(p) {
+  return state.milestones.filter(m => m.project_id === p.id && !m.deleted_at)
+    .sort((a,b) => (a.sort_order ?? 1e9) - (b.sort_order ?? 1e9) || timestampValue(a.created) - timestampValue(b.created) || a.id.localeCompare(b.id));
+}
+function milestoneTasks(m) { return state.tasks.filter(t => normalTask(t) && t.project_id === m.project_id && t.milestone_id === m.id); }
+function milestoneComplete(m) { const ts = milestoneTasks(m); return ts.length > 0 && ts.every(t => t.done); }
+function nextOrder(a,b) { return (a.deadline || '9999').localeCompare(b.deadline || '9999') || timestampValue(a.created) - timestampValue(b.created) || a.id.localeCompare(b.id); }
+function projectProgress(p) {
+  const ts = projectTasks(p), ms = projectMilestones(p);
+  const current = ms.find(m => !milestoneComplete(m));
+  const next = (current ? milestoneTasks(current) : ts).filter(t => !t.done).sort(nextOrder)[0];
+  return {tasks:ts, milestones:ms, current, next, done:ts.filter(t => t.done).length,
+    milestonesDone:ms.filter(milestoneComplete).length,
+    overdue:ts.filter(t => !t.done && t.deadline && t.deadline < todayStr()).length};
+}
+function associationValue(t) {
+  const p = projectById(t.project_id);
+  if (!t.project_id && !t.milestone_id) return '';
+  // A retained, temporarily hidden link differs from an explicit unlink choice.
+  if (!p || p.deleted_at) return 'retained:' + JSON.stringify({kind:'project', project_id:t.project_id, milestone_id:t.milestone_id});
+  const m = milestoneById(t.milestone_id);
+  if (t.milestone_id && (!m || m.deleted_at || m.project_id !== p.id)) {
+    return 'retained:' + JSON.stringify({kind:'milestone', project_id:p.id, milestone_id:t.milestone_id});
+  }
+  return JSON.stringify([p.id, m ? m.id : null]);
+}
+
+function associationPatch(value) {
+  const [project_id,milestone_id] = value ? JSON.parse(value) : [null,null];
+  return {project_id,milestone_id};
+}
+function fillAssociation(select, value = '') {
+  select.replaceChildren();
+  const option = (v,label,disabled=false) => {const o=el('option','',label);o.value=v;o.disabled=disabled;select.appendChild(o);};
+  if (value.startsWith('retained:')) {
+    const retained = JSON.parse(value.slice('retained:'.length));
+    option(value, retained.kind === 'project' ? '项目已删除' : '待安排 · 里程碑已删除', true);
+  }
+  option('', '不关联项目');
+  const projects = state.projects.filter(p => !p.deleted_at).sort((a,b) => Number(!!b.core)-Number(!!a.core) || a.name.localeCompare(b.name));
+  for (const p of projects) {
+    const suffix = p.archived ? '（已归档）' : '';
+    option(JSON.stringify([p.id,null]), p.name + suffix + ' · 待安排');
+    for (const m of projectMilestones(p)) option(JSON.stringify([p.id,m.id]), p.name + suffix + ' · ' + m.name);
+  }
+  select.value = value; select.dataset.empty = String(!value);
+  select.title = select.selectedOptions[0]?.textContent || '所属项目和里程碑';
+}
+function rowField(t, field, tag, type, fallback) {
+  const key = t.id + ':' + field;
+  const draft = fieldDrafts.get(key);
+  const value = draft?.value ?? t[field] ?? fallback ?? '';
+  const n = el(tag, field === 'text' ? 'text' : field + '-input');
+  if (tag === 'input') {n.type=type || 'text';n.value=value;}
+  else {n.contentEditable='true';n.textContent=value;n.setAttribute('role','textbox');}
+  const labels = {text:'事项名称',owner:'负责人',deadline:'截止日期'};
+  n.setAttribute('aria-label', labels[field]); n.title = labels[field];
+  n.dataset.field = field;
+  if (draft?.failed) n.classList.add('save-failed');
+  const currentValue = () => tag === 'input' ? n.value : n.textContent;
+  n.addEventListener('input', () => { fieldDrafts.set(key,{value:currentValue(),failed:false});n.classList.remove('save-failed'); });
+  let savingValue;
+  async function commit() {
+    const raw = currentValue(); const value = raw.trim();
+    const prior = state.tasks.find(task => task.id === t.id)?.[field] ?? fallback ?? '';
+    if (value === prior) {fieldDrafts.delete(key);return;}
+    if (!value) {
+      fieldDrafts.set(key,{value:raw,failed:true});n.classList.add('save-failed');
+      status(labels[field] + '不能为空；输入保留在原行。',true); return;
+    }
+    if (value === savingValue) return;
+    savingValue=value;
+    const submittedDraft = {value,failed:false};
+    fieldDrafts.set(key,submittedDraft);
+    const ok = await patchTask(t.id,{[field]:value},() => {
+      if (fieldDrafts.get(key) === submittedDraft) fieldDrafts.delete(key);
+    });
+    if (!ok && fieldDrafts.get(key) === submittedDraft) {
+      fieldDrafts.set(key,{value:raw,failed:true});
+      if (n.isConnected && currentValue().trim() === value) n.classList.add('save-failed');
+      requestRender();
+    }
+    savingValue=undefined;
+  }
+  n.addEventListener('blur',commit);
+  // Native date pickers and selects can retain focus after choosing; commit the selected value.
+  if (field === 'deadline') n.addEventListener('change',commit);
+  n.addEventListener('keydown',e => {
+    if (e.key === 'Enter' && !e.isComposing) {e.preventDefault();n.blur();}
+    if (e.key === 'Escape') {
+      fieldDrafts.delete(key);
+      if (tag === 'input') n.value=t[field] ?? fallback ?? ''; else n.textContent=t[field] ?? '';
+      n.classList.remove('save-failed');n.blur();requestRender();
+    }
+  });
+  if (field === 'text') n.addEventListener('paste',e => {
+    e.preventDefault(); const text = e.clipboardData.getData('text/plain').replace(/\s*\n\s*/g,' ');
+    document.execCommand('insertText',false,text);
+  });
+  return n;
+}
+function renderTask(t) {
+  const li = el('li','inline-task' + (t.done?' done':'') + (t.auto_skipped?' auto-skipped':''));
+  li.dataset.id=t.id;
+  let lead;
+  if(t.source==='claude-suggest') {
+    li.classList.add('suggest'); lead=btn('✓ 采纳',()=>acceptSuggest(t.id),'accept-lead');
+  } else {
+    lead=el('input');lead.type='checkbox';lead.checked=!!t.done;lead.setAttribute('aria-label','完成：'+t.text);
+    lead.addEventListener('change',async()=>{
+      const checked=lead.checked;li.classList.toggle('done',checked);
+      const ok=await toggleTask(t.id,checked);
+      if(!ok) {lead.checked=!!t.done;li.classList.toggle('done',!!t.done);}
+    });
+  }
+  const text=rowField(t,'text','div');
+  text.title=[t.note,t.tag?('分类：'+t.tag):'',t.auto_skipped?'自动跳过，未实际完成':'',t.created?('添加：'+fmtFull(t.created)):'',t.done_at?('完成：'+fmtFull(t.done_at)):''].filter(Boolean).join('\n');
+  const owner=rowField(t,'owner','input','text','Ocean');
+  const dateWrap=el('span','deadline-wrap');
+  const deadline=rowField(t,'deadline','input','date');
+  dateWrap.classList.toggle('empty-date',!deadline.value);
+  const dateStatus=!t.done && deadline.value ? (deadline.value<todayStr()?'逾期':deadline.value===todayStr()?'今日到期':'截止日期') : '截止日期';
+  deadline.title=dateStatus + (deadline.value?' · '+deadline.value:' · 未设截止');
+  dateWrap.classList.toggle('overdue',dateStatus==='逾期');dateWrap.classList.toggle('due-today',dateStatus==='今日到期');
+  dateWrap.appendChild(deadline);
+  if(dateStatus==='逾期'||dateStatus==='今日到期')dateWrap.append(el('span','date-status',dateStatus==='今日到期'?'今日':dateStatus));
+  const association=el('select','association');association.setAttribute('aria-label','所属项目和里程碑');
+  fillAssociation(association,associationValue(t));
+  association.disabled=!!(t.recurring||t.recur_source||t.auto_skipped);
+  if(association.disabled) association.title='重复任务暂不关联项目';
+  association.addEventListener('change',async()=>{
+    const value=association.value;
+    if(!await patchTask(t.id,associationPatch(value))) {association.value=associationValue(t);}
+    association.blur();
+  });
+  const pri=el('select','pri-select');pri.setAttribute('aria-label','优先级');pri.title='优先级';
+  for(const v of ['P0','P1','P2','P3','']) {const o=el('option','',v||'—');o.value=v;pri.appendChild(o);}
+  pri.value=t.priority||'';pri.addEventListener('change',async()=>{if(!await setPriority(t.id,pri.value||null))pri.value=t.priority||'';pri.blur();});
+  const planned=btn(t.due?t.due.slice(5).replace('-','/'):'计划日',()=>openDatePicker(planned,t.due||'',v=>setDue(t.id,v)),'planned-date'+(t.due?' active':''));
+  planned.title='计划日：控制何时进入清单；与截止日期独立';
+  const del=btn(t.source==='claude-suggest'?'拒绝':'×',()=>deleteTask(t.id),'row-delete');del.title='删除事项';del.setAttribute('aria-label','删除事项：'+t.text);
+  li.append(lead,text,owner,dateWrap,association,pri,planned,del);
+  return li;
+}
+
+render = function() {
+  thingRenderer();
+  renderProjectList();renderProjectDetail();renderCoreSummary();
+  const association=document.getElementById('newAssociation');fillAssociation(association,association.value);
+  if(document.getElementById('reviewModal').classList.contains('show')) renderReview();
+  applyTab();
+};
+function applyTab() {
+  document.getElementById('thingsView').hidden=activeTab!=='things';
+  document.getElementById('projectsView').hidden=activeTab!=='projects';
+  document.getElementById('newTaskForm').hidden=activeTab!=='things';
+  for(const tab of document.querySelectorAll('[data-tab]')) {
+    tab.setAttribute('aria-selected',String(tab.dataset.tab===activeTab));
+    tab.tabIndex=tab.dataset.tab===activeTab?0:-1;
+  }
+}
+function switchTab(tab) {
+  activeTab=tab;localStorage.setItem('tracking-tab',tab);applyTab();requestRender();
+}
+for(const tab of document.querySelectorAll('[data-tab]')) {
+  tab.addEventListener('click',()=>switchTab(tab.dataset.tab));
+  tab.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();switchTab(activeTab==='things'?'projects':'things');document.getElementById(activeTab+'Tab').focus();}});
+}
+function renderCoreSummary() {
+  const root=document.getElementById('coreSummary');root.replaceChildren();
+  for(const p of state.projects.filter(p=>p.core&&!p.archived&&!p.deleted_at)) {
+    const progress=projectProgress(p);
+    const summary=btn('',()=>{projectFilter='active';document.getElementById('projectSearch').value='';selectedProject=p.id;switchTab('projects');});
+    summary.append(el('b','',p.name),el('span','',`${progress.current?.name || (progress.milestones.length?'里程碑已完成':'待建里程碑')} · ${progress.done}/${progress.tasks.length} 项`));
+    if(progress.next)summary.append(el('span','',' · 下一步：'+progress.next.text));
+    if(progress.overdue)summary.append(el('span','overdue-text',progress.overdue+' 项逾期'));
+    root.appendChild(summary);
+  }
+}
+function visibleProjects() {
+  const query=document.getElementById('projectSearch').value.trim().toLocaleLowerCase();
+  return state.projects.filter(p=>projectFilter==='trash'?!!p.deleted_at:!p.deleted_at&&(projectFilter==='archived'?!!p.archived:!p.archived))
+    .filter(p=>!query||(p.name+' '+(p.owner||'Ocean')).toLocaleLowerCase().includes(query))
+    .sort((a,b)=>Number(!!b.core)-Number(!!a.core)||(a.created||'').localeCompare(b.created||'')||a.name.localeCompare(b.name));
+}
+function renderProjectList() {
+  const root=document.getElementById('projectList');root.replaceChildren();
+  const ps=visibleProjects();
+  if(!ps.some(p=>p.id===selectedProject))selectedProject=ps[0]?.id||'';
+  for(const b of document.querySelectorAll('[data-filter]'))b.setAttribute('aria-pressed',String(b.dataset.filter===projectFilter));
+  for(const p of ps) {
+    const progress=projectProgress(p);
+    const b=btn('',()=>{selectedProject=p.id;localStorage.setItem('tracking-project',p.id);renderProjectList();renderProjectDetail();},'project-item');
+    b.dataset.projectId=p.id;b.setAttribute('aria-current',String(p.id===selectedProject));
+    b.append(el('strong','',(p.core?'★ ':'')+p.name),el('small','',`${p.owner||'Ocean'} · ${progress.done}/${progress.tasks.length} 项完成`));root.appendChild(b);
+  }
+  if(!ps.length)root.append(el('p','project-hint',document.getElementById('projectSearch').value?'没有匹配的项目':'这里还没有项目'));
+}
+document.getElementById('projectSearch').addEventListener('input',()=>{renderProjectList();renderProjectDetail();});
+for(const b of document.querySelectorAll('[data-filter]'))b.addEventListener('click',()=>{projectFilter=b.dataset.filter;renderProjectList();renderProjectDetail();});
+document.getElementById('newProjectBtn').addEventListener('click',()=>openEntity('project'));
+
+function openEntity(kind, entity=null, project=null) {
+  dialogContext={kind,entity,project};
+  const f=document.getElementById('entityForm');f.reset();
+  document.getElementById('entityTitle').textContent=(entity?'编辑':'新建')+(kind==='project'?'项目':'里程碑');
+  f.elements.name.value=entity?.name||'';
+  f.elements.owner.value=entity?.owner||project?.owner||'Ocean';
+  f.elements.goal.value=entity?.goal||'';f.elements.due.value=entity?.due||'';f.elements.core.checked=!!entity?.core;
+  document.getElementById('entityGoalLabel').hidden=kind!=='project';document.getElementById('entityCoreLabel').hidden=kind!=='project';document.getElementById('entityDueLabel').hidden=kind==='project';
+  document.getElementById('entityError').textContent='';
+  document.getElementById('entityDialog').showModal();f.elements.name.focus();
+}
+document.getElementById('entityCancel').addEventListener('click',()=>document.getElementById('entityDialog').close());
+document.getElementById('entityDialog').addEventListener('close',()=>{dialogContext=null;requestRender();});
+document.getElementById('entityDialog').addEventListener('cancel',e=>{
+  if(document.getElementById('entityForm').dataset.saving==='true')e.preventDefault();
+});
+document.getElementById('entityForm').addEventListener('submit',async e=>{
+  e.preventDefault();const f=e.currentTarget;const c=dialogContext;
+  const payload={name:f.elements.name.value.trim(),owner:f.elements.owner.value.trim()};
+  if(!payload.name||!payload.owner){document.getElementById('entityError').textContent='请填写名称和负责人';return;}
+  if(c.kind==='project')Object.assign(payload,{goal:f.elements.goal.value.trim(),core:f.elements.core.checked});
+  else Object.assign(payload,{due:f.elements.due.value||null,...(!c.entity?{project_id:c.project.id}:{})});
+  const controls = Array.from(f.elements).map(control=>[control,control.disabled]);
+  f.dataset.saving='true';f.setAttribute('aria-busy','true');
+  controls.forEach(([control])=>{control.disabled=true;});
+  const base=c.kind==='project'?'/projects':'/milestones';
+  const ok=await mutate(base+(c.entity?'/'+encodeURIComponent(c.entity.id):'/add'),c.entity?'PATCH':'POST',payload,result=>{
+    if(c.kind==='project'&&!c.entity){selectedProject=result.project?.id||'';projectFilter='active';document.getElementById('projectSearch').value='';}
+  });
+  controls.forEach(([control,disabled])=>{control.disabled=disabled;});
+  delete f.dataset.saving;f.removeAttribute('aria-busy');
+  if(ok)document.getElementById('entityDialog').close();
+  else document.getElementById('entityError').textContent='保存失败，内容已保留，请重试。';
+});
+function milestoneAddForm(p,m) {
+  const key=p.id+':'+(m?.id||'unscheduled');
+  const form=el('form','milestone-add');form.dataset.milestoneId=m?.id||'';
+  const draft=addDrafts.get(key)||{text:'',owner:'Ocean',deadline:''};
+  for(const [name,type,placeholder] of [['text','text','＋ 添加事项'],['owner','text','负责人'],['deadline','date','截止日期']]) {
+    const input=el('input');input.name=name;input.type=type;input.placeholder=placeholder;input.value=draft[name];input.required=true;input.setAttribute('aria-label',name==='text'?'事项名称':placeholder);
+    input.addEventListener('input',()=>{addDrafts.set(key,{text:form.elements.text.value,owner:form.elements.owner.value,deadline:form.elements.deadline.value});});form.appendChild(input);
+  }
+  const add=el('button','subtle-button','添加');add.type='submit';form.appendChild(add);
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();const payload={text:form.elements.text.value.trim(),owner:form.elements.owner.value.trim(),deadline:form.elements.deadline.value,project_id:p.id,milestone_id:m?.id||null,priority:'P1',tag:'work',source:'user'};
+    if(!payload.text||!payload.owner||!payload.deadline){status('请填写事项、负责人和截止日期',true);return;}
+    add.disabled=true;
+    const ok=await mutate('/todos/add','POST',payload,()=>{
+      if(form.elements.text.value.trim()===payload.text&&form.elements.owner.value.trim()===payload.owner&&form.elements.deadline.value===payload.deadline){addDrafts.delete(key);form.reset();form.elements.owner.value='Ocean';}
+    });
+    add.disabled=false;
+    if(ok){requestRender();}
+  });
+  return form;
+}
+function renderMilestone(p,m,allMilestones,index) {
+  const tasks=m?milestoneTasks(m):projectTasks(p).filter(t=>!t.milestone_id||!milestoneById(t.milestone_id)||milestoneById(t.milestone_id).deleted_at);
+  tasks.sort((a,b)=>Number(!!a.done)-Number(!!b.done)||nextOrder(a,b));
+  const complete=tasks.length>0&&tasks.every(t=>t.done);
+  const key=m?.id||p.id+':unscheduled';
+  const expanded=milestoneExpanded.has(key)?milestoneExpanded.get(key):!complete;
+  const section=el('section','milestone'+(!tasks.length?' empty':''));if(m)section.dataset.milestoneId=m.id;
+  const header=el('div','milestone-head');
+  const heading=btn((complete?'✓ ':expanded?'▾ ':'▸ ')+(m?.name||'待安排'),()=>{milestoneExpanded.set(key,!expanded);renderProjectDetail();},'milestone-title');heading.setAttribute('aria-expanded',String(expanded));
+  header.append(heading);
+  const metaText=[m?.owner||p.owner||'Ocean',m?.due||'',tasks.length?`${tasks.filter(t=>t.done).length}/${tasks.length} 完成`:'待拆事项'].filter(Boolean).join(' · ');
+  header.append(el('span','milestone-meta',metaText));
+  if(m&&!p.deleted_at){
+    const actions=el('div','milestone-actions');
+    for(const [label,delta] of [['↑',-1],['↓',1]]) {
+      const b=btn(label,()=>{const ids=allMilestones.map(x=>x.id);[ids[index],ids[index+delta]]=[ids[index+delta],ids[index]];mutate('/milestones/reorder','POST',{project_id:p.id,ids});});b.title=delta<0?'上移里程碑':'下移里程碑';b.setAttribute('aria-label',b.title);b.disabled=index+delta<0||index+delta>=allMilestones.length;actions.append(b);
+    }
+    actions.append(btn('编辑',()=>openEntity('milestone',m,p)),btn('删除',()=>{if(confirm('删除此里程碑？事项会保留在「待安排」，里程碑可恢复。'))mutate('/milestones/'+encodeURIComponent(m.id),'DELETE');}));header.append(actions);
+  }
+  section.append(header);
+  const body=el('div');body.hidden=!expanded;
+  const ul=el('ul');for(const t of tasks)ul.append(renderTask(t));body.append(ul);
+  if(!p.deleted_at)body.append(milestoneAddForm(p,m));
+  section.append(body);return section;
+}
+function renderProjectDetail() {
+  const root=document.getElementById('projectDetail');root.replaceChildren();
+  const p=projectById(selectedProject);
+  if(!p){root.append(el('div','project-empty','选择一个项目查看进展，或点击「＋ 项目」开始。'));return;}
+  const progress=projectProgress(p);const heading=el('div','project-heading');const title=el('div');
+  title.append(el('h2','',p.name),el('div','project-owner',(p.core?'★ 核心项目 · ':'')+'负责人 '+(p.owner||'Ocean')));
+  if(p.goal)title.append(el('p','',p.goal));heading.append(title);
+  const actions=el('div','project-actions');
+  if(p.deleted_at){actions.append(btn('恢复项目',()=>mutate('/projects/'+encodeURIComponent(p.id)+'/restore','POST',{},()=>{projectFilter=p.archived?'archived':'active';}),'primary'));}
+  else {
+    actions.append(btn('编辑',()=>openEntity('project',p)),btn(p.archived?'恢复跟进':'归档',()=>mutate('/projects/'+encodeURIComponent(p.id),'PATCH',{archived:!p.archived},()=>{projectFilter=p.archived?'active':'archived';})),btn('删除',()=>{if(confirm('删除「'+p.name+'」？\n项目进入回收站，事项仍保留在事情跟进中。'))mutate('/projects/'+encodeURIComponent(p.id),'DELETE',undefined,()=>{projectFilter='trash';});},'danger'));
+  }
+  heading.append(actions);root.append(heading);
+  if(p.deleted_at){root.append(el('p','project-hint','项目在回收站；事项仍保留在「事情跟进」。恢复项目后恢复尚未调整的关联。'));return;}
+  const summary=el('div','project-progress');
+  summary.append(el('b','',`当前：${progress.current?.name||(progress.milestones.length?'里程碑已完成':'待建里程碑')}`),el('span','',`${progress.done}/${progress.tasks.length} 项完成 · ${progress.milestonesDone}/${progress.milestones.length} 个里程碑完成`));
+  if(progress.next)summary.append(el('span','','下一步：'+progress.next.text));
+  if(progress.overdue)summary.append(el('span','overdue-text',progress.overdue+' 项逾期'));
+  root.append(summary);
+  progress.milestones.forEach((m,i)=>root.append(renderMilestone(p,m,progress.milestones,i)));
+  root.append(btn('＋ 添加里程碑',()=>openEntity('milestone',null,p),'subtle-button'));
+  root.append(renderMilestone(p,null,[],0));
+  const deleted=state.milestones.filter(m=>m.project_id===p.id&&m.deleted_at);
+  if(deleted.length){
+    const section=el('details','deleted-milestones');section.append(el('summary','',`已删除里程碑（${deleted.length}）`));
+    for(const m of deleted){const row=el('div','deleted-milestone');row.append(el('span','',m.name),btn('恢复',()=>mutate('/milestones/'+encodeURIComponent(m.id)+'/restore','POST',{}),'subtle-button'));section.append(row);}root.append(section);
+  }
+}
+document.getElementById('newTaskForm').addEventListener('submit',async e=>{
+  e.preventDefault();const text=document.getElementById('newText'),owner=document.getElementById('newOwner'),date=document.getElementById('newDeadline');
+  if(!text.value.trim()||!owner.value.trim()||!date.value){status('请填写事项、负责人和截止日期。',true);return;}
+  const payload={text:text.value.trim(),owner:owner.value.trim(),deadline:date.value,priority:document.getElementById('newPri').value,tag:document.getElementById('newTag').value,source:'user',...associationPatch(document.getElementById('newAssociation').value)};
+  const submit=document.getElementById('addBtn');submit.disabled=true;
+  const ok=await mutate('/todos/add','POST',payload,()=>{
+    if(text.value.trim()===payload.text&&owner.value.trim()===payload.owner&&date.value===payload.deadline){text.value='';owner.value='Ocean';date.value='';document.getElementById('newAssociation').value='';}
+  });
+  submit.disabled=false;if(ok){requestRender();text.focus();}
+});
+applyTab();load();setInterval(load,5000);
+fetch('/version',{cache:'no-store'}).then(r=>r.json()).then(v=>{
+  const label=el('span','meta',v.preview?'隔离预览 · 数据副本':('v'+(v.version||'1.1.0')));
+  label.id='environmentLabel';document.querySelector('.app-titlebar').appendChild(label);
+}).catch(()=>{});
+
 </script>
 </body>
 </html>

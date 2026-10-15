@@ -14,7 +14,7 @@ class RecurringUiContractTest(unittest.TestCase):
         self.assertIn('<option value="monthly">每月</option>', self.html)
         self.assertIn('id="recurNewWeekday"', self.html)
         self.assertIn('id="recurNewMonthday"', self.html)
-        self.assertIn('fetch("/recurring/add"', self.html)
+        self.assertIn("mutate('/recurring/add', 'POST', payload)", self.html)
         self.assertIn("function scheduleLabel", self.html)
 
     def test_all_recurring_seeds_are_hidden_from_the_main_list(self):

@@ -5,6 +5,7 @@ daily-todo 桌面 App 主入口（py2app 打包入口）
 - 主线程跑 WKWebView 原生窗口
 """
 import os
+import json
 import subprocess
 import threading
 import time
@@ -13,14 +14,14 @@ import urllib.request
 import server  # 同包内
 
 
-PORT = 8766
+PORT = server.PORT
 URL = f"http://localhost:{PORT}"
-SYNC_SH = os.path.expanduser("~/daily-todo/sync.sh")
+SYNC_SH = os.path.join(server.DATA_DIR, "sync.sh")
 
 
 def sync_pull_blocking(timeout: int = 8) -> None:
     """启动时同步阻塞跑一次（拉远端），失败不抛"""
-    if not os.path.exists(SYNC_SH):
+    if os.environ.get("TODO_DISABLE_SYNC") == "1" or not os.path.exists(SYNC_SH):
         return
     try:
         subprocess.run(
@@ -36,13 +37,24 @@ def sync_pull_blocking(timeout: int = 8) -> None:
 
 def server_up() -> bool:
     try:
-        urllib.request.urlopen(f"{URL}/todos", timeout=1)
-        return True
-    except Exception:
+        with urllib.request.urlopen(f"{URL}/health", timeout=1) as response:
+            health = json.load(response)
+    except OSError:
         return False
+    except ValueError:
+        raise RuntimeError("本地端口被其他服务占用，请先退出旧版每日待办后重试。")
+    if (not isinstance(health, dict) or not isinstance(health.get("data_file"), str)
+            or health.get("app") != "daily-todo" or health.get("version") != server.VERSION
+            or health.get("channel") != server.RELEASE_CHANNEL
+            or os.path.realpath(health.get("data_file", "")) != os.path.realpath(server.DATA_FILE)
+            or health.get("preview") != (os.environ.get("TODO_PREVIEW") == "1")):
+        raise RuntimeError("正在运行的待办服务与此版本不一致，请退出旧版或重新运行本地安装器。")
+    return True
 
 
 def start_server_thread() -> None:
+    if server_up():
+        return
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     # 等就绪
@@ -50,6 +62,7 @@ def start_server_thread() -> None:
         if server_up():
             return
         time.sleep(0.15)
+    raise RuntimeError("每日待办服务未能启动，请检查本地服务日志。")
 
 
 _window_ref = [None]
@@ -134,9 +147,13 @@ def setup_app_menu() -> None:
 
 
 def main() -> None:
-    # 启动时先拉远端（其他机器上的最新改动）
-    sync_pull_blocking()
-    start_server_thread()
+    try:
+        start_server_thread()
+    except RuntimeError as exc:
+        subprocess.run(["/usr/bin/osascript", "-e", 'on run argv\n display alert "每日待办暂时无法打开" message (item 1 of argv) as critical\nend run', str(exc)])
+        return
+    # 网络同步在后台进行，首屏与输入不等待远端；完成后页面轮询读回。
+    threading.Thread(target=sync_pull_blocking, kwargs={"timeout": 120}, daemon=True).start()
     import webview
     window = webview.create_window(
         "每日待办",

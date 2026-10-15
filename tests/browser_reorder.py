@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory() as tmp:
         page.keyboard.press('ArrowUp')
         page.wait_for_function('!dirty')
         assert order() == ['t1','t2','t3','t4','t0'], order()
-        assert dialogs and '排序未保存' in dialogs[0]
+        assert '未保存' in page.locator('#saveStatus').inner_text()
         assert not errors, errors
         print('PASS: mouse drag both directions, reload persistence, group boundary, keyboard, failure rollback; no JS errors')
         browser.close()

@@ -1,0 +1,42 @@
+# 事情跟进与项目跟进
+
+同一应用两个 Tab，共用同一条事项。事情跟进保持一行一件事，点击名称、负责人、截止日期即可修改；归属项目和里程碑可选。
+
+## 使用
+
+- 新建普通事项必填内容、负责人、截止日期；负责人默认 Ocean。截止日期不决定何时开始显示，未来截止的事项也立即进入清单。
+- 原有 `due` 是计划日，继续控制旧的未来清单；新 `deadline` 是截止日期，不覆盖原有计划日。
+- 项目页可新建、搜索、编辑、归档、删除和恢复项目；里程碑可新增多个、编辑、调整顺序、删除和恢复。
+- 删除项目只隐藏项目，事项仍在事情清单；删除里程碑后事项显示在该项目的待安排。恢复后原关系仍在，期间手动调整的归属不回退。
+- 至少一条事项且全部完成时，里程碑自动完成；撤销或新增未完成事项后恢复进行中。历史完成事项计入进度，空里程碑不算完成。
+- 存量事项没有负责人时显示 Ocean，没有截止日期时显示未设截止；打开页面不会批量回写。循环任务不关联项目。
+- 核心项目摘要显示当前节点、完成数、下一步和逾期事项。日期按北京时间计算，无后台推送。
+
+## 本地预览
+
+在分支 checkout 中运行 `python3 scripts/preview.py`，访问 `http://127.0.0.1:8797/`。
+数据副本放在 `~/Library/Application Support/daily-todo-preview/data/`，不会同步到真实数据仓库。
+界面显示「隔离预览 · 数据副本」。正式应用继续使用 `~/daily-todo-data/todos.json`。
+
+## 验证与打包
+
+```bash
+python3 -m unittest discover -s tests -q
+python3 tests/browser_projects.py
+TODO_TEST_BROWSER=webkit python3 tests/browser_projects.py
+python3 tests/browser_reorder.py
+~/daily-todo/venv/bin/python setup.py py2app
+python3 scripts/install-local.py
+```
+
+最后一行只检查并展示安装位置。验证后用 `python3 scripts/install-local.py --install` 安装本机：备份旧应用、真实数据和启动配置，更新应用与私有同步脚本，校验服务后打开应用。安装不发布公开 Release。
+
+备份位于 `~/Library/Application Support/daily-todo/deploy-backups/<时间>/`。
+安装失败会恢复旧应用、同步脚本和启动配置；不会自动覆盖可能刚被用户修改的真实数据。手动回退时先停止两个版本的写入，保留当前数据副本，再恢复备份应用和配置；旧版不能与新版并行写项目数据。
+
+## 同步与兼容
+
+后端按事项保存，跨进程文件锁与本地 Git 合并共享；联网过程不持有数据写锁。
+合并按 ID 和字段处理，保留双侧新增、独立字段修改和撤销完成。具体部署文件见 [sync/DEPLOY.md](../sync/DEPLOY.md)。
+其余 Mac 必须升级同一版本及同步脚本再编辑新版数据。本地模拟双设备测试不等于另一台真实 Mac 已完成升级或验收。
+外部调用 `POST /todos/add` 新增普通事项时须提供 `deadline`（YYYY-MM-DD），`owner` 缺省为 Ocean；缺少日期返回明确错误，不自动猜日期。已有读取、PATCH 和循环任务端点继续可用。

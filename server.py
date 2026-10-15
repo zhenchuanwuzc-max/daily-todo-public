@@ -8,6 +8,8 @@ daily-todo 本地 HTTP 服务
 - 资源（index.html）：跟脚本同目录 / .app bundle Resources
 """
 import json
+import fcntl
+import uuid
 import os
 import sys
 import shutil
@@ -19,8 +21,8 @@ import re
 import zipfile
 from html.parser import HTMLParser
 from urllib.parse import quote, unquote, urlsplit
-from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
-from datetime import date, datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer as _ThreadingHTTPServer
+from datetime import date, datetime, timedelta, timezone
 
 try:
     from zoneinfo import ZoneInfo
@@ -28,7 +30,12 @@ try:
 except Exception:
     TZ = None
 
-PORT = 8766
+class ThreadingHTTPServer(_ThreadingHTTPServer):
+    request_queue_size = 64
+    daemon_threads = True
+
+
+PORT = int(os.environ.get("TODO_PORT", "8766"))
 
 # 数据目录走 TODO_DATA_DIR env，回退 ~/daily-todo-data 再回退 ~/daily-todo（代码在脚本所在处，数据分仓）
 DATA_DIR = os.environ.get("TODO_DATA_DIR", "")
@@ -44,7 +51,8 @@ DATA_DIR = os.path.expanduser(DATA_DIR)
 DATA_FILE = os.path.join(DATA_DIR, "todos.json")
 
 # 本机状态（不进 iCloud 同步），存"每日任务"上次膨胀日期 + 备份
-APP_SUPPORT_DIR = os.path.expanduser("~/Library/Application Support/daily-todo")
+APP_SUPPORT_DIR = os.path.expanduser(os.environ.get(
+    "TODO_APP_SUPPORT_DIR", "~/Library/Application Support/daily-todo"))
 STATE_FILE = os.path.join(APP_SUPPORT_DIR, "state.json")
 BACKUP_DIR = os.path.join(APP_SUPPORT_DIR, "backups")
 BACKUP_KEEP = 7
@@ -158,6 +166,7 @@ def get_version() -> str:
 
 
 VERSION = get_version()
+RELEASE_CHANNEL = "project-preview"
 GITHUB_REPO = "zhenchuanwuzc-max/daily-todo-public"
 GH_TOKEN_FILE = os.path.expanduser("~/daily-todo/.gh-token")
 
@@ -299,6 +308,8 @@ def download_asset(asset_url: str, dest_path: str, digest: str = "") -> None:
 
 def install_update() -> dict:
     """异步触发：开线程跑下载 + updater，主请求立即返回"""
+    if RELEASE_CHANNEL != "stable" or os.environ.get("TODO_DISABLE_UPDATE") == "1":
+        raise ValueError("项目跟进版本不使用公开版本更新，请通过本地开发入口升级")
     rel = fetch_latest_release()
     asset = next((a for a in rel.get("assets", []) if a.get("name", "").endswith(".zip")), None)
     if not asset:
@@ -404,14 +415,21 @@ rm -rf "{update_dir}/extracted"
 
 
 def read_data():
-    if not os.path.exists(DATA_FILE):
-        return {"updated": datetime.now().isoformat(timespec="seconds"), "tasks": []}
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    # 用文件 mtime 覆盖 updated → Claude/外部直接改文件也能被 App polling 感知
-    mtime = os.path.getmtime(DATA_FILE)
-    data["updated"] = datetime.fromtimestamp(mtime).isoformat(timespec="seconds")
-    return data
+    """Return a compatible view without migrating or rewriting legacy records."""
+    with _write_lock:
+        if not os.path.exists(DATA_FILE):
+            return {"updated": None, "tasks": [], "projects": [],
+                    "milestones": [], "revision": 0}
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        data.setdefault("tasks", [])
+        data.setdefault("projects", [])
+        data.setdefault("milestones", [])
+        data.setdefault("revision", 0)
+        # Include file mtime at microsecond precision for out-of-process writers.
+        data["updated"] = datetime.fromtimestamp(
+            os.path.getmtime(DATA_FILE), timezone.utc).isoformat(timespec="microseconds")
+        return data
 
 
 _sync_timer = None
@@ -421,6 +439,8 @@ _sync_lock = threading.Lock()
 def schedule_sync(delay: float = 5.0) -> None:
     """防抖触发 git sync：5 秒内多次写入只跑一次"""
     global _sync_timer
+    if os.environ.get("TODO_DISABLE_SYNC") == "1":
+        return
     sync_sh = os.path.join(DATA_DIR, "sync.sh")
     if not os.path.exists(sync_sh):
         return
@@ -445,16 +465,83 @@ def _run_sync(sync_sh: str) -> None:
         pass
 
 
-_write_lock = threading.RLock()
+class _DataLock:
+    """Serialize threads and local sync processes; recursive entry flocks only once."""
+    def __init__(self):
+        self.thread_lock = threading.RLock()
+        self.local = threading.local()
+
+    def __enter__(self):
+        self.thread_lock.acquire()
+        depth = getattr(self.local, "depth", 0)
+        try:
+            if depth == 0:
+                directory = os.path.dirname(DATA_FILE)
+                os.makedirs(directory, exist_ok=True)
+                self.local.handle = open(os.path.join(directory, ".data.lock"), "a+")
+                fcntl.flock(self.local.handle.fileno(), fcntl.LOCK_EX)
+            self.local.depth = depth + 1
+        except Exception:
+            if depth == 0 and getattr(self.local, "handle", None):
+                self.local.handle.close()
+            self.thread_lock.release()
+            raise
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            self.local.depth -= 1
+            if self.local.depth == 0:
+                fcntl.flock(self.local.handle.fileno(), fcntl.LOCK_UN)
+                self.local.handle.close()
+        finally:
+            self.thread_lock.release()
+
+
+_write_lock = _DataLock()
+_timestamp_lock = threading.Lock()
+_last_timestamp = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def timestamp():
+    global _last_timestamp
+    with _timestamp_lock:
+        now = datetime.now(timezone.utc)
+        if now <= _last_timestamp:
+            now = _last_timestamp + timedelta(microseconds=1)
+        _last_timestamp = now
+        return now.isoformat(timespec="microseconds")
+
+
+def stamp_fields(entity, fields, stamp=None):
+    if not fields:
+        return
+    stamp = stamp or timestamp()
+    entity["updated_at"] = stamp
+    entity.setdefault("_field_updated", {}).update({field: stamp for field in fields})
+
+
+class ConflictError(ValueError):
+    pass
+
+
+class RequestOriginError(ValueError):
+    pass
 
 
 def _atomic_write_todos(data) -> None:
     """假定调用方已持有 _write_lock。备份 → tmp + fsync + rename"""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    data["updated"] = datetime.now().isoformat(timespec="seconds")
+    directory = os.path.dirname(DATA_FILE)
+    os.makedirs(directory, exist_ok=True)
+    existing_revision = 0
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, encoding="utf-8") as current:
+            existing_revision = json.load(current).get("revision", 0)
+    data["revision"] = max(existing_revision, data.get("revision", 0)) + 1
+    data["updated"] = timestamp()
     backup_todos_json()
     tmp = tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", dir=DATA_DIR, delete=False, suffix=".tmp"
+        "w", encoding="utf-8", dir=directory, delete=False, suffix=".tmp"
     )
     try:
         json.dump(data, tmp, ensure_ascii=False, indent=2)
@@ -489,7 +576,7 @@ def reorder_tasks(item):
         selected = [by_id.get(i) for i in ids]
         today = today_str()
         for task in selected:
-            if (task is None or task.get("done")
+            if (task is None or task.get("deleted_at") or task.get("done")
                     or task.get("source") == "claude-suggest"
                     or (task.get("due") or "") > today
                     or (task.get("recurring") in ("daily", "weekly", "monthly")
@@ -502,46 +589,85 @@ def reorder_tasks(item):
             raise ValueError("请在同一优先级内排序")
         for position, task in enumerate(selected):
             task["sort_order"] = position
+            stamp_fields(task, ["sort_order"])
         _atomic_write_todos(data)
     schedule_sync()
-    return {"ok": True, "updated": data["updated"]}
+    return {"ok": True, "updated": data["updated"], "revision": data["revision"]}
 
 
-def add_single_task(item: dict) -> dict:
-    """锁内 read-append-write 单条普通 task（Claude 打通用）。
-    防 recur 污染 + 同 text 未完成幂等去重 + 跨机 UUID id。
-    复用 _atomic_write_todos（已含写前备份 + 原子写 + 刷新 updated）。"""
-    text = (item.get("text") or "").strip()
-    if not text:
-        raise ValueError("text required")
-    import uuid
+def required_text(value, field):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field} required")
+    return value.strip()
+
+
+def valid_date(value, field, required=False):
+    if value in (None, "") and not required:
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        raise ValueError(f"{field} must be YYYY-MM-DD")
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        raise ValueError(f"{field} must be a real YYYY-MM-DD date") from None
+    return value
+
+
+def entity_by_id(data, collection, entity_id, include_deleted=False):
+    if not isinstance(entity_id, str) or not entity_id:
+        raise ValueError("id required")
+    target = next((e for e in data.get(collection, []) if e.get("id") == entity_id), None)
+    if target is None or (target.get("deleted_at") and not include_deleted):
+        raise KeyError(f"{collection} {entity_id} not found")
+    return target
+
+
+def validate_task_links(data, task, previous=None):
+    project_id, milestone_id = task.get("project_id"), task.get("milestone_id")
+    for value in (project_id, milestone_id):
+        if value is not None and (not isinstance(value, str) or not value):
+            raise ValueError("project_id and milestone_id must be an ID or null")
+    if (task.get("recurring") or task.get("recur_source")) and (project_id or milestone_id):
+        raise ValueError("循环事项暂不关联项目或里程碑")
+    # A title/completion edit must still work while the linked entity is deleted.
+    if previous is not None and all(task.get(k) == previous.get(k)
+                                    for k in ("project_id", "milestone_id")):
+        return
+    try:
+        if project_id:
+            entity_by_id(data, "projects", project_id)
+        if milestone_id:
+            milestone = entity_by_id(data, "milestones", milestone_id)
+            if not project_id or milestone.get("project_id") != project_id:
+                raise ValueError("里程碑必须属于所选项目")
+    except KeyError:
+        raise ValueError("项目或里程碑已删除，请重新选择") from None
+
+
+def add_single_task(item: dict):
+    """Append a fresh task; same wording can legitimately belong to many projects."""
+    text = required_text(item.get("text"), "text")
+    owner = required_text(item.get("owner", "Ocean"), "owner")
+    deadline = valid_date(item.get("deadline"), "deadline", required=True)
     with _write_lock:
-        if os.path.exists(DATA_FILE):
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        else:
-            data = {"updated": None, "tasks": []}
-        tasks = data.get("tasks", [])
-        norm = text.replace(" ", "").lower()
-        for t in tasks:
-            if (not t.get("done") and not t.get("recur_source")
-                    and t.get("text", "").replace(" ", "").lower() == norm):
-                return t, True  # 已存在未完成 → 幂等返回，不重复加
+        data = read_data()
+        stamp = timestamp()
         task = {
-            "id": f"claude-{uuid.uuid4().hex[:12]}",
-            "text": text,
-            "done": False,
-            "created": datetime.now().isoformat(timespec="seconds"),
-            "done_at": None,
-            "source": item.get("source", "claude"),
-            "tag": item.get("tag", "work"),
+            "id": f"task-{uuid.uuid4().hex}", "text": text,
+            "owner": owner, "deadline": deadline, "done": False,
+            "created": stamp, "done_at": None,
+            "source": item.get("source", "user"), "tag": item.get("tag", "work"),
             "priority": item.get("priority", "P2"),
-            "due": item.get("due"),
+            "due": valid_date(item.get("due"), "due"),
+            "project_id": item.get("project_id"), "milestone_id": item.get("milestone_id"),
         }
+        if item.get("recurring") or item.get("recur_source"):
+            raise ValueError("使用循环事项入口创建循环任务")
         if item.get("note"):
             task["note"] = str(item["note"])
-        tasks.append(task)
-        data["tasks"] = tasks
+        validate_task_links(data, task)
+        stamp_fields(task, list(task), stamp)
+        data["tasks"].append(task)
         _atomic_write_todos(data)
     schedule_sync()
     return task, False
@@ -587,7 +713,7 @@ def add_recurring_seed(item: dict):
         tasks = data.get("tasks", [])
         norm = text.replace(" ", "").lower()
         for existing in tasks:
-            if existing.get("recur_source"):
+            if existing.get("deleted_at") or existing.get("recur_source"):
                 continue
             if existing.get("recurring") != recurring:
                 continue
@@ -597,18 +723,23 @@ def add_recurring_seed(item: dict):
                 continue
             return existing, True
 
+        stamp = timestamp()
         seed = {
             "id": f"seed_{uuid.uuid4().hex[:12]}",
             "text": text,
             "done": False,
-            "created": datetime.now().isoformat(timespec="seconds"),
+            "created": stamp,
             "done_at": None,
             "source": item.get("source", "user"),
             "tag": item.get("tag", "personal"),
             "priority": item.get("priority", "P1"),
             "recurring": recurring,
+            "owner": required_text(item.get("owner", "Ocean"), "owner"),
             **schedule,
         }
+        if item.get("project_id") or item.get("milestone_id"):
+            raise ValueError("循环事项暂不关联项目或里程碑")
+        stamp_fields(seed, list(seed), stamp)
         tasks.append(seed)
         data["tasks"] = tasks
         _atomic_write_todos(data)
@@ -616,41 +747,189 @@ def add_recurring_seed(item: dict):
     return seed, False
 
 
+TASK_FIELDS = {"done", "done_at", "tag", "due", "priority", "text", "owner",
+               "deadline", "project_id", "milestone_id", "source", "note", "sort_order"}
+
+
+def apply_task_patch(data, target, patch):
+    changes = {key: value for key, value in patch.items() if key in TASK_FIELDS}
+    for field in ("text", "owner"):
+        if field in changes:
+            changes[field] = required_text(changes[field], field)
+    if "deadline" in changes:
+        # Legacy tasks may stay undated, but a deadline once set cannot be emptied.
+        changes["deadline"] = valid_date(changes["deadline"], "deadline",
+                                         required=bool(target.get("deadline")))
+    if "due" in changes:
+        changes["due"] = valid_date(changes["due"], "due")
+    if "done" in changes and not isinstance(changes["done"], bool):
+        raise ValueError("done must be boolean")
+    if "sort_order" in changes and (isinstance(changes["sort_order"], bool)
+                                    or not isinstance(changes["sort_order"], (int, float))):
+        raise ValueError("sort_order must be numeric")
+    candidate = {**target, **changes}
+    validate_task_links(data, candidate, previous=target)
+    stamp = timestamp()
+    if "done" in changes and changes["done"] != bool(target.get("done")):
+        changes["done_at"] = stamp if changes["done"] else None
+        if target.get("auto_skipped"):
+            changes["auto_skipped"] = False
+    changed = [key for key, value in changes.items() if target.get(key) != value]
+    target.update(changes)
+    stamp_fields(target, changed, stamp)
+
+
 def patch_task(task_id: str, patch: dict) -> dict:
-    """锁内 read-modify-write 单条 task 字段（Claude 标完成/取消等远程更新打通用）。
-    支持字段：done / done_at / tag / due / priority / text。
-    done=True 自动盖 done_at = now；done=False 自动清 done_at = None（除非 patch 显式给）。
-    返回更新后的 task；找不到 id raises KeyError。"""
-    if not task_id:
-        raise ValueError("task_id required")
-    ALLOWED = {"done", "done_at", "tag", "due", "priority", "text"}
     with _write_lock:
-        if not os.path.exists(DATA_FILE):
-            raise KeyError(f"data file missing")
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        tasks = data.get("tasks", [])
-        target = None
-        for t in tasks:
-            if t.get("id") == task_id:
-                target = t
-                break
-        if target is None:
-            raise KeyError(f"task {task_id} not found")
-        for k, v in patch.items():
-            if k not in ALLOWED:
-                continue
-            target[k] = v
-        # done 字段语义：True 时自动盖 done_at；False 时自动清 done_at（除非 patch 显式给 done_at）
-        if "done" in patch and "done_at" not in patch:
-            if patch["done"]:
-                target["done_at"] = datetime.now().isoformat(timespec="seconds")
-            else:
-                target["done_at"] = None
-        data["tasks"] = tasks
+        data = read_data()
+        target = entity_by_id(data, "tasks", task_id)
+        apply_task_patch(data, target, patch)
         _atomic_write_todos(data)
     schedule_sync()
     return target
+
+
+def add_project(item):
+    name = required_text(item.get("name"), "name")
+    owner = required_text(item.get("owner", "Ocean"), "owner")
+    if not isinstance(item.get("core", False), bool):
+        raise ValueError("core must be boolean")
+    if not isinstance(item.get("goal", ""), str):
+        raise ValueError("goal must be text")
+    with _write_lock:
+        data = read_data()
+        stamp = timestamp()
+        project = {"id": f"project-{uuid.uuid4().hex}", "name": name, "owner": owner,
+                   "goal": item.get("goal", "").strip(), "core": item.get("core", False),
+                   "archived": False, "deleted_at": None, "created": stamp}
+        stamp_fields(project, list(project), stamp)
+        data["projects"].append(project)
+        _atomic_write_todos(data)
+    schedule_sync()
+    return project
+
+
+def add_milestone(item):
+    name = required_text(item.get("name"), "name")
+    due = valid_date(item.get("due"), "due")
+    with _write_lock:
+        data = read_data()
+        project = entity_by_id(data, "projects", item.get("project_id"))
+        owner = required_text(item.get("owner", project.get("owner") or "Ocean"), "owner")
+        siblings = [m for m in data["milestones"] if m.get("project_id") == project["id"]]
+        stamp = timestamp()
+        milestone = {"id": f"milestone-{uuid.uuid4().hex}", "name": name, "owner": owner,
+                     "project_id": project["id"], "due": due, "deleted_at": None,
+                     "sort_order": max((m.get("sort_order", -1) for m in siblings), default=-1) + 1,
+                     "created": stamp}
+        stamp_fields(milestone, list(milestone), stamp)
+        data["milestones"].append(milestone)
+        _atomic_write_todos(data)
+    schedule_sync()
+    return milestone
+
+
+def patch_entity(collection, entity_id, patch):
+    allowed = {"name", "owner", "goal", "core", "archived"} if collection == "projects" else {
+        "name", "owner", "due"}
+    with _write_lock:
+        data = read_data()
+        target = entity_by_id(data, collection, entity_id)
+        changes = {key: value for key, value in patch.items() if key in allowed}
+        for field in ("name", "owner"):
+            if field in changes:
+                changes[field] = required_text(changes[field], field)
+        for field in ("core", "archived"):
+            if field in changes and not isinstance(changes[field], bool):
+                raise ValueError(f"{field} must be boolean")
+        if "goal" in changes:
+            if not isinstance(changes["goal"], str):
+                raise ValueError("goal must be text")
+            changes["goal"] = changes["goal"].strip()
+        if "due" in changes:
+            changes["due"] = valid_date(changes["due"], "due")
+        fields = [key for key, value in changes.items() if target.get(key) != value]
+        target.update(changes)
+        stamp_fields(target, fields)
+        _atomic_write_todos(data)
+    schedule_sync()
+    return target
+
+
+def set_deleted(collection, entity_id, deleted=True):
+    """Keep association IDs intact so restoring never overwrites later reassignment."""
+    with _write_lock:
+        data = read_data()
+        target = entity_by_id(data, collection, entity_id, include_deleted=True)
+        if collection == "milestones" and not deleted:
+            entity_by_id(data, "projects", target["project_id"])
+        stamp = timestamp()
+        target["deleted_at"] = stamp if deleted else None
+        stamp_fields(target, ["deleted_at"], stamp)
+        _atomic_write_todos(data)
+    schedule_sync()
+    return target
+
+
+def reorder_milestones(item):
+    ids = item.get("ids")
+    if (not isinstance(ids, list) or not ids or
+            any(not isinstance(i, str) or not i for i in ids) or len(ids) != len(set(ids))):
+        raise ValueError("ids must contain unique milestone IDs")
+    with _write_lock:
+        data = read_data()
+        project = entity_by_id(data, "projects", item.get("project_id"))
+        selected = [entity_by_id(data, "milestones", i) for i in ids]
+        if any(m["project_id"] != project["id"] for m in selected):
+            raise ValueError("只能在同一项目内调整里程碑顺序")
+        # Preserve a concurrently-added sibling after the caller's known items.
+        remaining = sorted((m for m in data["milestones"]
+                            if m["project_id"] == project["id"] and not m.get("deleted_at")
+                            and m["id"] not in ids), key=lambda m: m.get("sort_order", 0))
+        stamp = timestamp()
+        for order, milestone in enumerate(selected + remaining):
+            milestone["sort_order"] = order
+            stamp_fields(milestone, ["sort_order"], stamp)
+        _atomic_write_todos(data)
+    schedule_sync()
+    return {"ok": True, "revision": data["revision"]}
+
+
+def replace_snapshot(payload):
+    """Versioned compatibility endpoint; metadata can only change via typed APIs."""
+    with _write_lock:
+        current = read_data()
+        revision = payload.get("revision")
+        if isinstance(revision, bool) or not isinstance(revision, int) or revision != current["revision"]:
+            raise ConflictError("数据已更新，请刷新后重试；旧版整份保存已停用")
+        tasks = payload.get("tasks")
+        if not isinstance(tasks, list):
+            raise ValueError("tasks must be an array")
+        for collection in ("projects", "milestones"):
+            if collection in payload and payload[collection] != current[collection]:
+                raise ValueError("项目和里程碑请使用单条保存接口")
+        seen = set()
+        by_id = {t["id"]: t for t in current["tasks"]}
+        for task in tasks:
+            if not isinstance(task, dict) or not isinstance(task.get("id"), str):
+                raise ValueError("each task requires a string ID")
+            task_id = task["id"]
+            if task_id in seen:
+                raise ValueError("duplicate task ID")
+            seen.add(task_id)
+            if task_id not in by_id:
+                raise ValueError("新增事项请使用单条保存接口")
+            target = by_id[task_id]
+            if not target.get("deleted_at"):
+                apply_task_patch(current, target, task)
+        # Old list removal is translated to tombstones, never physical deletion.
+        for task_id, target in by_id.items():
+            if task_id not in seen and not target.get("deleted_at"):
+                target["deleted_at"] = timestamp()
+                stamp_fields(target, ["deleted_at"], target["deleted_at"])
+        _atomic_write_todos(current)
+    schedule_sync()
+    return {"ok": True, "updated": current["updated"], "revision": current["revision"]}
 
 
 # ============== 重复任务 ==============
@@ -702,10 +981,10 @@ def ensure_recurring_today() -> bool:
             data = json.load(f)
 
         tasks = data.get("tasks", [])
-        now_iso = datetime.now().isoformat(timespec="seconds")
+        now_iso = timestamp()
 
         for t in tasks:
-            if not t.get("recur_source") or t.get("done"):
+            if t.get("deleted_at") or not t.get("recur_source") or t.get("done"):
                 continue
             inst_date = (t.get("id") or "").rsplit(":", 1)[-1]
             if len(inst_date) == 10 and inst_date < today:
@@ -713,12 +992,13 @@ def ensure_recurring_today() -> bool:
                 t["done_at"] = now_iso
                 t["auto_skipped"] = True
                 t["skipped_for"] = inst_date
+                stamp_fields(t, ["done", "done_at", "auto_skipped", "skipped_for"], now_iso)
                 skipped += 1
 
         seeds = [
             t for t in tasks
             if t.get("recurring") in {"daily", "weekly", "monthly"}
-            and not t.get("recur_source")
+            and not t.get("deleted_at") and not t.get("recur_source")
         ]
         if not seeds and skipped == 0:
             write_state(state)
@@ -738,7 +1018,7 @@ def ensure_recurring_today() -> bool:
             if instance_id in existing_ids:
                 last_gen[seed_id] = today
                 continue
-            tasks.append({
+            instance = {
                 "id": instance_id,
                 "text": seed.get("text", ""),
                 "done": False,
@@ -748,7 +1028,10 @@ def ensure_recurring_today() -> bool:
                 "tag": seed.get("tag", "personal"),
                 "priority": seed.get("priority", "P1"),
                 "recur_source": seed_id,
-            })
+                "owner": seed.get("owner") or "Ocean",
+            }
+            stamp_fields(instance, list(instance), now_iso)
+            tasks.append(instance)
             existing_ids.add(instance_id)
             last_gen[seed_id] = today
             added += 1
@@ -770,6 +1053,8 @@ _scheduler = None
 def start_scheduler() -> None:
     """APScheduler：每天 00:01 Asia/Shanghai 触发膨胀；启动时立即跑一次"""
     global _scheduler
+    if os.environ.get("TODO_DISABLE_SCHEDULER") == "1":
+        return
     try:
         ensure_recurring_today()
     except Exception as e:
@@ -826,157 +1111,211 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", f"{ctype}; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         if isinstance(body, str):
             body = body.encode("utf-8")
         self.wfile.write(body)
 
-    def do_GET(self):
-        if self.path == "/" or self.path == "/index.html":
-            with open(HTML_FILE, "r", encoding="utf-8") as f:
-                self._send(200, f.read(), "text/html")
-        elif self.path == "/todos":
-            self._send(200, json.dumps(read_data(), ensure_ascii=False))
-        elif self.path == "/version":
-            self._send(200, json.dumps({"version": VERSION, "repo": GITHUB_REPO}))
-        elif self.path == "/update-progress":
-            self._send(200, json.dumps(get_progress()))
-        elif self.path == "/check-update":
-            try:
-                rel = fetch_latest_release()
-                self._send(200, json.dumps({
-                    "current": VERSION,
-                    "latest": (rel.get("tag_name") or "").lstrip("v"),
-                    "html_url": rel.get("html_url"),
-                    "assets": [{"name": a.get("name"), "url": a.get("browser_download_url")}
-                               for a in rel.get("assets", [])],
-                    "has_token": bool(read_gh_token()),
-                }))
-            except Exception as e:
-                # 区分 401/404（token 失效或私仓没 token）vs 网络错误
-                msg = str(e)
-                self._send(200, json.dumps({
-                    "current": VERSION,
-                    "error": msg,
-                    "has_token": bool(read_gh_token()),
-                }))
-        else:
-            self._send(404, '{"error":"not found"}')
+    def _json(self, body, code=200):
+        self._send(code, json.dumps(body, ensure_ascii=False))
 
-    def do_POST(self):
-        if self.path == "/todos/reorder":
+    def _validate_request(self, mutating=False):
+        # Native webview and browser pages are both served from this loopback port.
+        # Reject DNS-rebinding Host values, foreign browser origins, and simple
+        # cross-origin text/plain POSTs; command-line JSON clients need no Origin.
+        hosts = {"localhost", "127.0.0.1", "::1"}
+        try:
+            host = urlsplit("//" + self.headers.get("Host", ""))
+            if (host.hostname not in hosts or host.port != self.server.server_port
+                    or host.username or host.password or host.path or host.query or host.fragment):
+                raise RequestOriginError("请求 Host 必须是当前本地服务")
+            origin = self.headers.get("Origin")
+            if origin is not None:
+                parsed = urlsplit(origin)
+                if (parsed.scheme != "http" or parsed.hostname not in hosts
+                        or parsed.port != self.server.server_port or parsed.username
+                        or parsed.password or parsed.path or parsed.query or parsed.fragment):
+                    raise RequestOriginError("不允许其他网页访问本地待办服务")
+        except ValueError as exc:
+            if isinstance(exc, RequestOriginError):
+                raise
+            raise RequestOriginError("无效的本地请求来源") from None
+        if mutating:
             try:
                 length = int(self.headers.get("Content-Length", 0))
-                item = json.loads(self.rfile.read(length).decode("utf-8"))
-                self._send(200, json.dumps(reorder_tasks(item), ensure_ascii=False))
-            except ValueError as exc:
-                self._send(400, json.dumps({"error": str(exc)}, ensure_ascii=False))
-            except Exception as exc:
-                self._send(500, json.dumps({"error": str(exc)}, ensure_ascii=False))
-            return
-        if self.path == "/todos":
+            except ValueError:
+                raise ValueError("无效的 Content-Length") from None
+            if length < 0 or self.headers.get("Transfer-Encoding"):
+                raise ValueError("不支持此请求正文格式")
+            if length and self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+                raise ValueError("写入请求正文必须是 application/json")
+
+    def _payload(self):
+        try:
             length = int(self.headers.get("Content-Length", 0))
-            try:
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            except Exception as e:
-                self._send(400, json.dumps({"error": str(e)}))
-                return
-            write_data(payload)
-            self._send(200, json.dumps({"ok": True, "updated": payload.get("updated")}))
-            return
-        if self.path == "/install-update":
-            try:
-                result = install_update()
-                self._send(200, json.dumps(result))
-            except Exception as e:
-                self._send(500, json.dumps({"error": str(e)}))
-            return
-        if self.path == "/sync-now":
-            # 手动同步：跑 sync.sh（pull+push），读它写的状态文件回给前端
-            sync_sh = os.path.join(DATA_DIR, "sync.sh")
-            status_file = "/tmp/daily-todo-sync.status"
-            if not os.path.exists(sync_sh):
-                self._send(200, json.dumps({"ok": False, "status": "sync.sh 不存在"}, ensure_ascii=False))
-                return
-            try:
-                os.remove(status_file)
-            except OSError:
-                pass
-            try:
-                subprocess.run(["/bin/bash", sync_sh], cwd=DATA_DIR, timeout=45,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                status = ""
+            if length < 0 or length > 2_000_000:
+                raise ValueError("request body too large")
+            payload = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+        except (ValueError, UnicodeDecodeError):
+            raise ValueError("请求需要有效 JSON 对象") from None
+        if not isinstance(payload, dict):
+            raise ValueError("请求需要 JSON 对象")
+        return payload
+
+    def _entity_response(self, collection, entity):
+        self._json({"ok": True, {"projects": "project", "milestones": "milestone",
+                                "tasks": "task"}[collection]: entity,
+                    "revision": read_data()["revision"]})
+
+    def _error(self, exc):
+        code = 403 if isinstance(exc, RequestOriginError) else (409 if isinstance(exc, ConflictError)
+               else (400 if isinstance(exc, ValueError) else (404 if isinstance(exc, KeyError) else 500)))
+        self._json({"error": str(exc)}, code)
+
+    def do_GET(self):
+        path = urlsplit(self.path).path
+        try:
+            self._validate_request()
+            if path in ("/", "/index.html"):
+                with open(HTML_FILE, "r", encoding="utf-8") as f:
+                    self._send(200, f.read(), "text/html")
+            elif path in ("/project-ui.js", "/project-ui.css"):
+                with open(get_resource_path(path[1:]), encoding="utf-8") as f:
+                    self._send(200, f.read(), "application/javascript" if path.endswith(".js") else "text/css")
+            elif path == "/todos":
+                self._json(read_data())
+            elif path == "/health":
+                self._json({"ok": True, "app": "daily-todo", "version": VERSION,
+                            "schema": 2, "channel": RELEASE_CHANNEL,
+                            "preview": os.environ.get("TODO_PREVIEW") == "1",
+                            "data_file": os.path.abspath(DATA_FILE),
+                            "revision": read_data()["revision"],
+                            "sync_enabled": os.environ.get("TODO_DISABLE_SYNC") != "1"})
+            elif path == "/version":
+                self._json({"version": VERSION, "repo": GITHUB_REPO,
+                            "channel": RELEASE_CHANNEL,
+                            "preview": os.environ.get("TODO_PREVIEW") == "1"})
+            elif path in ("/projects", "/milestones"):
+                data = read_data()
+                self._json({path[1:]: data[path[1:]], "revision": data["revision"]})
+            elif re.fullmatch(r"/(projects|milestones)/[^/]+", path):
+                collection, entity_id = path.strip("/").split("/")
+                self._entity_response(collection, entity_by_id(
+                    read_data(), collection, unquote(entity_id), include_deleted=True))
+            elif path == "/update-progress":
+                self._json(get_progress())
+            elif path == "/check-update":
+                if RELEASE_CHANNEL != "stable" or os.environ.get("TODO_DISABLE_UPDATE") == "1":
+                    self._json({"current": VERSION, "channel": RELEASE_CHANNEL,
+                                "error": "项目跟进版本不使用公开版本更新，请通过本地开发入口升级"})
+                    return
                 try:
-                    with open(status_file, encoding="utf-8") as f:
-                        status = f.read().strip()
+                    rel = fetch_latest_release()
+                    self._json({"current": VERSION,
+                                "latest": (rel.get("tag_name") or "").lstrip("v"),
+                                "html_url": rel.get("html_url"),
+                                "assets": [{"name": a.get("name"), "url": a.get("browser_download_url")}
+                                           for a in rel.get("assets", [])],
+                                "has_token": bool(read_gh_token())})
+                except Exception as exc:
+                    self._json({"current": VERSION, "error": str(exc),
+                                "has_token": bool(read_gh_token())})
+            else:
+                self._json({"error": "not found"}, 404)
+        except FileNotFoundError:
+            self._json({"error": "not found"}, 404)
+        except Exception as exc:
+            self._error(exc)
+
+    def do_POST(self):
+        path = urlsplit(self.path).path
+        try:
+            self._validate_request(mutating=True)
+            if path == "/todos/reorder":
+                self._json(reorder_tasks(self._payload()))
+            elif path == "/todos":
+                self._json(replace_snapshot(self._payload()))
+            elif path == "/todos/add":
+                task, deduped = add_single_task(self._payload())
+                self._json({"ok": True, "deduped": deduped, "task": task,
+                            "revision": read_data()["revision"]})
+            elif path == "/projects/add":
+                self._entity_response("projects", add_project(self._payload()))
+            elif path == "/milestones/add":
+                self._entity_response("milestones", add_milestone(self._payload()))
+            elif path == "/milestones/reorder":
+                self._json(reorder_milestones(self._payload()))
+            elif re.fullmatch(r"/(projects|milestones)/[^/]+/restore", path):
+                collection, entity_id, _ = path.strip("/").split("/")
+                self._entity_response(collection, set_deleted(collection, unquote(entity_id), False))
+            elif path == "/recurring/add":
+                task, deduped = add_recurring_seed(self._payload())
+                self._json({"ok": True, "deduped": deduped, "task": task,
+                            "revision": read_data()["revision"]})
+            elif path == "/ensure-recurring":
+                added = ensure_recurring_today()
+                self._json({"ok": True, "added": added, "revision": read_data()["revision"]})
+            elif path == "/install-update":
+                self._json(install_update())
+            elif path == "/sync-now":
+                if os.environ.get("TODO_DISABLE_SYNC") == "1":
+                    self._json({"ok": False, "status": "当前隔离预览未启用同步"})
+                    return
+                sync_sh = os.path.join(DATA_DIR, "sync.sh")
+                status_file = os.environ.get("TODO_SYNC_STATUS_FILE", "/tmp/daily-todo-sync.status")
+                if not os.path.exists(sync_sh):
+                    self._json({"ok": False, "status": "sync.sh 不存在"})
+                    return
+                try:
+                    os.remove(status_file)
                 except OSError:
                     pass
-                self._send(200, json.dumps({"ok": status.startswith("ok"), "status": status or "未知"}, ensure_ascii=False))
-            except subprocess.TimeoutExpired:
-                self._send(200, json.dumps({"ok": False, "status": "同步超时（45s），可能网络慢，稍后再试"}, ensure_ascii=False))
-            except Exception as e:
-                self._send(500, json.dumps({"ok": False, "status": str(e)}, ensure_ascii=False))
-            return
-        if self.path == "/ensure-recurring":
-            try:
-                added = ensure_recurring_today()
-                self._send(200, json.dumps({"ok": True, "added": added}))
-            except Exception as e:
-                self._send(500, json.dumps({"error": str(e)}))
-            return
-        if self.path == "/recurring/add":
-            length = int(self.headers.get("Content-Length", 0))
-            try:
-                item = json.loads(self.rfile.read(length).decode("utf-8"))
-                task, deduped = add_recurring_seed(item)
-                self._send(200, json.dumps({
-                    "ok": True,
-                    "deduped": deduped,
-                    "task": task,
-                }, ensure_ascii=False))
-            except ValueError as exc:
-                self._send(400, json.dumps({"error": str(exc)}, ensure_ascii=False))
-            except Exception as exc:
-                self._send(500, json.dumps({"error": str(exc)}, ensure_ascii=False))
-            return
-        if self.path == "/todos/add":
-            length = int(self.headers.get("Content-Length", 0))
-            try:
-                item = json.loads(self.rfile.read(length).decode("utf-8"))
-            except Exception as e:
-                self._send(400, json.dumps({"error": str(e)}))
-                return
-            try:
-                task, deduped = add_single_task(item)
-                self._send(200, json.dumps({"ok": True, "deduped": deduped, "task": task}, ensure_ascii=False))
-            except Exception as e:
-                self._send(500, json.dumps({"error": str(e)}))
-            return
-        self._send(404, '{"error":"not found"}')
+                try:
+                    result = subprocess.run(["/bin/bash", sync_sh], cwd=DATA_DIR, timeout=120,
+                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    status = ""
+                    try:
+                        with open(status_file, encoding="utf-8") as f:
+                            status = f.read().strip()
+                    except OSError:
+                        pass
+                    self._json({"ok": result.returncode == 0 and status.startswith("ok"),
+                                "status": status or f"同步未返回状态（退出码 {result.returncode}）"})
+                except subprocess.TimeoutExpired:
+                    self._json({"ok": False, "status": "同步超时（120 秒），请稍后重试"})
+            else:
+                self._json({"error": "not found"}, 404)
+        except Exception as exc:
+            self._error(exc)
 
     def do_PATCH(self):
-        # PATCH /todos/{id} body {done|tag|due|priority|text|done_at: ...}
-        if self.path.startswith("/todos/") and self.path.count("/") == 2:
-            task_id = self.path.split("/", 2)[2]
-            if not task_id:
-                self._send(400, '{"error":"task_id required"}')
-                return
-            length = int(self.headers.get("Content-Length", 0))
-            try:
-                patch = json.loads(self.rfile.read(length).decode("utf-8"))
-            except Exception as e:
-                self._send(400, json.dumps({"error": str(e)}))
-                return
-            try:
-                task = patch_task(task_id, patch)
-                self._send(200, json.dumps({"ok": True, "task": task}, ensure_ascii=False))
-            except KeyError as e:
-                self._send(404, json.dumps({"error": str(e)}))
-            except Exception as e:
-                self._send(500, json.dumps({"error": str(e)}))
-            return
-        self._send(404, '{"error":"not found"}')
+        path = urlsplit(self.path).path
+        try:
+            self._validate_request(mutating=True)
+            if re.fullmatch(r"/(todos|projects|milestones)/[^/]+", path):
+                collection, entity_id = path.strip("/").split("/")
+                collection = "tasks" if collection == "todos" else collection
+                patch = self._payload()
+                entity = (patch_task(unquote(entity_id), patch) if collection == "tasks" else
+                          patch_entity(collection, unquote(entity_id), patch))
+                self._entity_response(collection, entity)
+            else:
+                self._json({"error": "not found"}, 404)
+        except Exception as exc:
+            self._error(exc)
+
+    def do_DELETE(self):
+        path = urlsplit(self.path).path
+        try:
+            self._validate_request(mutating=True)
+            if re.fullmatch(r"/(todos|projects|milestones)/[^/]+", path):
+                collection, entity_id = path.strip("/").split("/")
+                collection = "tasks" if collection == "todos" else collection
+                self._entity_response(collection, set_deleted(collection, unquote(entity_id)))
+            else:
+                self._json({"error": "not found"}, 404)
+        except Exception as exc:
+            self._error(exc)
 
     def log_message(self, fmt, *args):
         return

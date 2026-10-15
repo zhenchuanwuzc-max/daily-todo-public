@@ -40,7 +40,12 @@ class ReorderTest(unittest.TestCase):
         expected = copy.deepcopy(self.tasks)
         expected[0]["sort_order"] = 1
         expected[1]["sort_order"] = 0
-        self.assertEqual(data["tasks"], expected)
+        # Ordering now also records field timestamps for multi-device merging.
+        for actual, original in zip(data["tasks"], expected):
+            self.assertEqual({k: v for k, v in actual.items()
+                              if k not in {"updated_at", "_field_updated"}}, original)
+        for task in data["tasks"][:2]:
+            self.assertTrue(task["_field_updated"]["sort_order"])
         server.reorder_tasks({"ids": ["a", "b"]})
         self.assertEqual(server.read_data()["tasks"][0]["sort_order"], 0)
 
