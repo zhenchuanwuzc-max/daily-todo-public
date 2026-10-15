@@ -66,6 +66,27 @@ def main():
                 dialog.wait_for(state="hidden")
                 settle()
 
+            def menu_action(wrapper, name):
+                """Open the compact settings menu before using an existing action."""
+                root = page.locator(wrapper)
+                menu = root.locator("details.action-menu")
+                if not menu.evaluate("node => node.open"):
+                    menu.locator("summary").click()
+                root.get_by_role("button", name=name, exact=True).click()
+
+            def assert_menu_dismissal(wrapper):
+                menu = page.locator(wrapper).locator("details.action-menu")
+                assert not menu.evaluate("node => node.open"), "Settings must start collapsed"
+                menu.locator("summary").click()
+                assert menu.evaluate("node => node.open")
+                page.keyboard.press("Escape")
+                assert not menu.evaluate("node => node.open"), "Escape must dismiss settings"
+                menu.locator("summary").click()
+                assert menu.evaluate("node => node.open")
+                page.locator("#projectSearch").click()
+                assert not menu.evaluate("node => node.open"), "Clicking outside must dismiss settings"
+                settle()
+
             # New independent task: deadline required, default owner, no project required.
             page.locator("#newText").fill("独立事项截止日期验证")
             page.locator("#addBtn").click()
@@ -82,6 +103,15 @@ def main():
             page.locator("#newProjectBtn").click()
             save_entity("体验优化项目", "项目负责人", core=True)
             project_id = server.read_data()["projects"][0]["id"]
+            assert page.locator(".project-progress").count() == 0, "An empty project must not show an empty progress card"
+            assert page.locator("#coreSummary").is_hidden(), "Project tab must not repeat the core summary"
+            assert page.locator('.milestone:not([data-milestone-id])').count() == 1
+            assert_menu_dismissal(".project-actions")
+            page.locator("#thingsTab").click()
+            assert page.locator("#coreSummary").is_visible()
+            assert "体验优化项目" in page.locator("#coreSummary").inner_text()
+            page.locator("#projectsTab").click()
+            assert page.locator("#coreSummary").is_hidden()
             for name in ("方案确认", "上线验收"):
                 page.get_by_role("button", name="＋ 添加里程碑", exact=True).click()
                 assert page.locator('#entityDialog [name="owner"]').input_value() == "项目负责人"
@@ -90,6 +120,9 @@ def main():
             first, second = milestones[0]["id"], milestones[1]["id"]
             assert page.locator(".milestone.empty").count() >= 2
             assert "待拆事项" in page.locator("#projectDetail").inner_text()
+            assert page.locator(".project-progress").count() == 0
+            assert page.locator('.milestone:not([data-milestone-id])').count() == 0, "Empty pending area must disappear once milestones exist"
+            assert_menu_dismissal(f'section[data-milestone-id="{first}"] .milestone-actions')
 
             def add_in_milestone(mid, text, owner="Ocean", deadline=today):
                 form = page.locator(f'form.milestone-add[data-milestone-id="{mid}"]')
@@ -106,10 +139,13 @@ def main():
             later_task = add_in_milestone(second, "发布前检查", deadline="2099-12-31")
             assert first_task["project_id"] == project_id and first_task["milestone_id"] == first
             assert "0/2 完成" in page.locator(f'section[data-milestone-id="{first}"]').inner_text()
-            assert "核对方案并完成评审" in page.locator("#coreSummary").inner_text()
+            assert page.locator(".project-progress").count() == 1
+            assert page.locator("#coreSummary").is_hidden()
 
             # Same item in both views; deadline is not a scheduled start date.
             page.locator("#thingsTab").click()
+            assert page.locator("#coreSummary").is_visible()
+            assert "核对方案并完成评审" in page.locator("#coreSummary").inner_text()
             row = page.locator(f'#groups [data-id="{first_task["id"]}"]')
             assert row.locator('[data-field=owner]').input_value() == "张三"
             assert page.locator(f'#groups [data-id="{second_task["id"]}"]').count() == 1
@@ -136,11 +172,13 @@ def main():
             retained_task = add_in_milestone(first, "里程碑恢复关联验证")
 
             # Reordering works; deletion preserves tasks, manual reassignment survives restore.
-            page.locator(f'section[data-milestone-id="{second}"]').get_by_role("button", name="上移里程碑", exact=True).click()
+            menu_action(f'section[data-milestone-id="{second}"] .milestone-actions', "上移里程碑")
             settle()
             assert page.locator("section.milestone[data-milestone-id]").first.get_attribute("data-milestone-id") == second
-            page.locator(f'section[data-milestone-id="{first}"] .milestone-actions').get_by_role("button", name="删除", exact=True).click()
+            menu_action(f'section[data-milestone-id="{first}"] .milestone-actions', "删除")
             settle()
+            assert page.locator('.milestone:not([data-milestone-id])').count() == 1, "Deleting a populated milestone must restore the pending area"
+            assert "待安排" in page.locator('.milestone:not([data-milestone-id]) .milestone-title').inner_text()
             assert page.locator(f'.milestone:not([data-milestone-id]) [data-id="{first_task["id"]}"]').count() == 1
             page.locator(f'#projectDetail [data-id="{first_task["id"]}"] .association').select_option(json.dumps([project_id, second], separators=(",", ":")))
             settle()
@@ -155,7 +193,7 @@ def main():
             assert task_named(second_task["text"])["milestone_id"] is None
             assert task_named(retained_task["text"])["milestone_id"] == first
 
-            page.locator(".project-actions").get_by_role("button", name="编辑", exact=True).click()
+            menu_action(".project-actions", "编辑")
             save_entity("体验优化项目已修改")
             page.locator("#projectSearch").fill("项目负责人")
             assert page.locator(".project-item").count() == 1
@@ -163,12 +201,12 @@ def main():
             assert page.locator(".project-item").count() == 0
             page.locator("#projectSearch").fill("")
             settle()
-            page.locator(".project-actions").get_by_role("button", name="归档", exact=True).click()
+            menu_action(".project-actions", "归档")
             settle()
             assert page.locator('[data-filter="archived"]').get_attribute("aria-pressed") == "true"
-            page.locator(".project-actions").get_by_role("button", name="恢复跟进", exact=True).click()
+            menu_action(".project-actions", "恢复跟进")
             settle()
-            page.locator(".project-actions").get_by_role("button", name="删除", exact=True).click()
+            menu_action(".project-actions", "删除")
             settle()
             assert "回收站" in page.locator("#projectDetail").inner_text()
             page.locator("#thingsTab").click()
@@ -225,7 +263,7 @@ def main():
 
             # Entity forms lock only while the request is pending, then recover all draft fields.
             page.locator("#projectsTab").click()
-            page.locator(".project-actions").get_by_role("button", name="编辑", exact=True).click()
+            menu_action(".project-actions", "编辑")
             dialog = page.locator("#entityDialog")
             dialog.locator('[name="name"]').fill("失败后保留项目名")
             held_entity = []
@@ -288,7 +326,7 @@ def main():
             assert page.locator('#groups [data-id="midnight-done"]').count() == 0
             assert page.locator('#groups [data-id="midnight-due"] .date-status').inner_text() == "逾期"
             assert not errors, errors
-            print(f"PASS {engine}: row editing/deadline, project CRUD/search/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 920px layout, persistence; no JS errors")
+            print(f"PASS {engine}: compact project empty states/core-summary visibility/settings menus with Escape+outside dismissal, row editing/deadline, project CRUD/search/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 920px layout, persistence; no JS errors")
             browser.close()
         httpd.shutdown()
 

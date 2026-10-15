@@ -719,7 +719,6 @@ body { min-width:900px; padding:16px 20px; }
 .core-summary .overdue-text { color:#b42318; }
 .milestone-section-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:6px; }
 .milestone-section-heading strong { font-size:14px; }
-.milestone-section-heading p { color:var(--muted); font-size:11px; line-height:1.6; margin-top:4px; }
 .add input { font:inherit; color:var(--text); background:transparent; border:0; outline:0; min-width:0; padding:5px 2px; }
 .add #newText { flex:1; min-width:150px; }
 .add .owner-input { flex:0 0 75px; width:75px; }
@@ -783,6 +782,15 @@ button:disabled { cursor:default; opacity:.5; }
 .milestone-meta { color:var(--muted); font-size:11px; white-space:nowrap; }
 .milestone-actions { display:flex; gap:3px; margin-left:auto; }
 .milestone-actions button { border:0; background:transparent; padding:4px; font-size:11px; }
+.action-menu { position:relative; }
+.action-menu > summary { list-style:none; cursor:pointer; font-size:12px; color:var(--text-2); padding:6px 9px; border:1px solid var(--line); border-radius:5px; background:var(--surface); white-space:nowrap; }
+.action-menu > summary::-webkit-details-marker { display:none; }
+.action-menu > summary::after { content:'⌄'; margin-left:6px; color:var(--muted); }
+.action-menu > summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.action-menu .action-menu-list { position:absolute; top:calc(100% + 5px); right:0; z-index:50; min-width:150px; padding:5px; background:var(--surface); border:1px solid var(--line); border-radius:7px; box-shadow:0 6px 20px rgba(0,0,0,.08); }
+.action-menu.opens-up .action-menu-list { top:auto; bottom:calc(100% + 5px); }
+.action-menu .action-menu-list button { display:block; width:100%; border:0; border-radius:4px; background:transparent; padding:9px 10px; text-align:left; font-size:12px; }
+.action-menu .action-menu-list button:hover:not(:disabled) { background:var(--hover); }
 .milestone-add { display:flex; align-items:center; gap:8px; padding:10px 2px; }
 .milestone-add input { padding:6px 5px; border:1px solid var(--line); border-radius:5px; background:var(--surface); font:inherit; font-size:12px; min-width:0; }
 .milestone-add input[name=text] { flex:1; }
@@ -2035,6 +2043,25 @@ function el(tag, cls, text) {
 function btn(text, fn, cls = '') {
   const b = el('button', cls, text); b.type = 'button'; b.addEventListener('click', fn); return b;
 }
+function settingsMenu(label, buttons) {
+  const menu=el('details','action-menu');
+  const trigger=el('summary','',label);
+  const list=el('div','action-menu-list');list.setAttribute('role','group');list.setAttribute('aria-label',label);
+  list.append(...buttons);menu.append(trigger,list);
+  list.addEventListener('click',e=>{if(e.target.closest('button:not(:disabled)'))menu.open=false;});
+  menu.addEventListener('toggle',()=>{
+    if(!menu.open)return;
+    document.querySelectorAll('.action-menu[open]').forEach(other=>{if(other!==menu)other.open=false;});
+    menu.classList.remove('opens-up');
+    if(list.getBoundingClientRect().bottom>innerHeight-12)menu.classList.add('opens-up');
+  });
+  return menu;
+}
+document.addEventListener('click',e=>document.querySelectorAll('.action-menu[open]').forEach(menu=>{if(!menu.contains(e.target))menu.open=false;}));
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  document.querySelectorAll('.action-menu[open]').forEach(menu=>{menu.open=false;if(menu.contains(document.activeElement))menu.querySelector('summary').focus();});
+});
 function status(text, error = false) {
   const n = document.getElementById('saveStatus'); n.textContent = text; n.classList.toggle('error', error);
 }
@@ -2264,6 +2291,7 @@ function applyTab() {
   document.getElementById('projectsView').hidden=activeTab!=='projects';
   document.getElementById('newTaskForm').hidden=activeTab!=='things';
   document.querySelector('.app-toolbar').hidden=activeTab!=='things';
+  document.getElementById('coreSummary').hidden=activeTab!=='things';
   for(const tab of document.querySelectorAll('[data-tab]')) {
     tab.setAttribute('aria-selected',String(tab.dataset.tab===activeTab));
     tab.tabIndex=tab.dataset.tab===activeTab?0:-1;
@@ -2287,7 +2315,7 @@ function renderCoreSummary() {
     const progress=projectProgress(p);
     const summary=btn('',()=>{projectFilter='active';document.getElementById('projectSearch').value='';selectedProject=p.id;switchTab('projects');});
     const first=el('div','core-summary-line');
-    first.append(el('b','',p.name),el('span','',`事项已完成 ${progress.done}/${progress.tasks.length} 件`));
+    first.append(el('b','',p.name),el('span','',progress.tasks.length?`事项已完成 ${progress.done}/${progress.tasks.length} 件`:'尚未添加事项'));
     if(progress.overdue)first.append(el('span','overdue-text',progress.overdue+' 件逾期'));
     const second=el('div','core-summary-line');
     second.append(el('span','',`当前里程碑：${progress.current?.name || (progress.milestones.length?'全部完成':'尚未添加')}`));
@@ -2310,7 +2338,7 @@ function renderProjectList() {
     const progress=projectProgress(p);
     const b=btn('',()=>{selectedProject=p.id;localStorage.setItem('tracking-project',p.id);renderProjectList();renderProjectDetail();},'project-item');
     b.dataset.projectId=p.id;b.setAttribute('aria-current',String(p.id===selectedProject));
-    b.append(el('strong','',(p.core?'★ ':'')+p.name),el('small','',`${p.owner||'Ocean'} · ${progress.done}/${progress.tasks.length} 项完成`));root.appendChild(b);
+    b.append(el('strong','',(p.core?'★ ':'')+p.name),el('small','',(p.owner||'Ocean')+(progress.tasks.length?` · ${progress.done}/${progress.tasks.length} 项完成`:'')));root.appendChild(b);
   }
   if(!ps.length)root.append(el('p','project-hint',document.getElementById('projectSearch').value?'没有匹配的项目':'这里还没有项目'));
 }
@@ -2387,10 +2415,12 @@ function renderMilestone(p,m,allMilestones,index) {
   header.append(el('span','milestone-meta',metaText));
   if(m&&!p.deleted_at){
     const actions=el('div','milestone-actions');
-    for(const [label,delta] of [['↑',-1],['↓',1]]) {
-      const b=btn(label,()=>{const ids=allMilestones.map(x=>x.id);[ids[index],ids[index+delta]]=[ids[index+delta],ids[index]];mutate('/milestones/reorder','POST',{project_id:p.id,ids});});b.title=delta<0?'上移里程碑':'下移里程碑';b.setAttribute('aria-label',b.title);b.disabled=index+delta<0||index+delta>=allMilestones.length;actions.append(b);
+    const buttons=[btn('编辑',()=>openEntity('milestone',m,p))];
+    for(const [label,delta] of [['上移里程碑',-1],['下移里程碑',1]]) {
+      const b=btn(label,()=>{const ids=allMilestones.map(x=>x.id);[ids[index],ids[index+delta]]=[ids[index+delta],ids[index]];mutate('/milestones/reorder','POST',{project_id:p.id,ids});});b.title=label;b.setAttribute('aria-label',label);b.disabled=index+delta<0||index+delta>=allMilestones.length;buttons.push(b);
     }
-    actions.append(btn('编辑',()=>openEntity('milestone',m,p)),btn('删除',()=>{if(confirm('删除此里程碑？事项会保留在「待安排」，里程碑可恢复。'))mutate('/milestones/'+encodeURIComponent(m.id),'DELETE');}));header.append(actions);
+    buttons.push(btn('删除',()=>{if(confirm('删除此里程碑？事项会保留在「待安排」，里程碑可恢复。'))mutate('/milestones/'+encodeURIComponent(m.id),'DELETE');},'danger'));
+    actions.append(settingsMenu('设置',buttons));header.append(actions);
   }
   section.append(header);
   const body=el('div');body.hidden=!expanded;
@@ -2408,7 +2438,7 @@ function renderProjectDetail() {
   const actions=el('div','project-actions');
   if(p.deleted_at){actions.append(btn('恢复项目',()=>mutate('/projects/'+encodeURIComponent(p.id)+'/restore','POST',{},()=>{projectFilter=p.archived?'archived':'active';}),'primary'));}
   else {
-    actions.append(btn('编辑',()=>openEntity('project',p)),btn(p.archived?'恢复跟进':'归档',()=>mutate('/projects/'+encodeURIComponent(p.id),'PATCH',{archived:!p.archived},()=>{projectFilter=p.archived?'active':'archived';})),btn('删除',()=>{if(confirm('删除「'+p.name+'」？\n项目进入回收站，事项仍保留在事情跟进中。'))mutate('/projects/'+encodeURIComponent(p.id),'DELETE',undefined,()=>{projectFilter='trash';});},'danger'));
+    actions.append(settingsMenu('项目设置',[btn('编辑',()=>openEntity('project',p)),btn(p.archived?'恢复跟进':'归档',()=>mutate('/projects/'+encodeURIComponent(p.id),'PATCH',{archived:!p.archived},()=>{projectFilter=p.archived?'active':'archived';})),btn('删除',()=>{if(confirm('删除「'+p.name+'」？\n项目进入回收站，事项仍保留在事情跟进中。'))mutate('/projects/'+encodeURIComponent(p.id),'DELETE',undefined,()=>{projectFilter='trash';});},'danger')]));
   }
   heading.append(actions);root.append(heading);
   if(p.deleted_at){root.append(el('p','project-hint','项目在回收站；事项仍保留在「事情跟进」。恢复项目后恢复尚未调整的关联。'));return;}
@@ -2416,13 +2446,14 @@ function renderProjectDetail() {
   summary.append(el('b','',`当前：${progress.current?.name||(progress.milestones.length?'里程碑已完成':'待建里程碑')}`),el('span','',`${progress.done}/${progress.tasks.length} 项完成 · ${progress.milestonesDone}/${progress.milestones.length} 个里程碑完成`));
   if(progress.next)summary.append(el('span','','下一步：'+progress.next.text));
   if(progress.overdue)summary.append(el('span','overdue-text',progress.overdue+' 项逾期'));
-  root.append(summary);
+  if(progress.tasks.length)root.append(summary);
   const milestoneHeading=el('div','milestone-section-heading');
-  const milestoneLabel=el('div');milestoneLabel.append(el('strong','','项目里程碑'),el('p','','按你的项目自定义；可编辑名称、负责人、日期，用 ↑ ↓ 调整顺序。'));
+  const milestoneLabel=el('strong','','里程碑');
   milestoneHeading.append(milestoneLabel,btn('＋ 添加里程碑',()=>openEntity('milestone',null,p),'subtle-button'));
   root.append(milestoneHeading);
   progress.milestones.forEach((m,i)=>root.append(renderMilestone(p,m,progress.milestones,i)));
-  root.append(renderMilestone(p,null,[],0));
+  const hasUnscheduled=projectTasks(p).some(t=>!t.milestone_id||!milestoneById(t.milestone_id)||milestoneById(t.milestone_id).deleted_at);
+  if(hasUnscheduled||!progress.milestones.length)root.append(renderMilestone(p,null,[],0));
   const deleted=state.milestones.filter(m=>m.project_id===p.id&&m.deleted_at);
   if(deleted.length){
     const section=el('details','deleted-milestones');section.append(el('summary','',`已删除里程碑（${deleted.length}）`));
