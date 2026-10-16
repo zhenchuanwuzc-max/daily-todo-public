@@ -699,6 +699,7 @@ def main():
             assert page.locator('#groups [data-id="midnight-done"]').count() == 0
             assert page.locator('#taskTimeRange').input_value() == "near"
             assert page.locator('#groups [data-id="midnight-due"]').count() == 0
+            page.locator('#globalSettings > summary').click()
             page.locator('#taskTimeRange').select_option("overdue")
             assert page.locator('#groups [data-id="midnight-due"] .date-status').inner_text() == "逾期"
             assert not errors, errors

@@ -724,9 +724,11 @@ body { min-width:900px; padding:16px 20px; }
 .person-option-list { overflow-y:auto; min-height:0; }
 .person-search { flex-shrink:0; width:100%; min-height:36px; padding:7px 9px; margin-bottom:5px; border:1px solid var(--line); border-radius:5px; font:inherit; font-size:13px; color:var(--text); background:var(--bg); }
 .person-no-match { padding:14px 9px; color:var(--muted); font-size:12px; }
-.things-list-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; }
-.things-list-controls select { border:1px solid var(--line); border-radius:5px; padding:5px 8px; background:var(--surface); color:var(--text-2); font:inherit; font-size:12px; }
-.things-list-controls span { color:var(--muted); font-size:12px; }
+.things-list-controls { display:grid; gap:8px; width:240px; padding:7px 5px 11px; margin-bottom:4px; border-bottom:1px solid var(--line); }
+.things-list-controls label { display:grid; grid-template-columns:60px minmax(0,1fr); align-items:center; gap:10px; color:var(--text-2); font-size:12px; }
+.things-list-controls select { width:100%; min-height:32px; border:1px solid var(--line); border-radius:5px; padding:5px 8px; background:var(--surface); color:var(--text-2); font:inherit; font-size:12px; }
+.things-list-controls span { color:var(--muted); font-size:11px; text-align:right; }
+.things-list-controls span:empty { display:none; }
 .person-options .person-check { flex:0 0 16px; width:16px; height:16px; line-height:14px; text-align:center; border:1px solid var(--line); border-radius:4px; margin-right:8px; }
 .person-options [aria-selected=true] .person-check { background:var(--accent); border-color:var(--accent); color:white; }
 .person-options .person-name { flex:1; }
@@ -888,9 +890,9 @@ button.milestone-title { cursor:pointer; }
       <label class="add-field">项目与里程碑<select id="newAssociation" class="association" aria-label="所属项目和里程碑"><option value="">不关联项目</option></select></label>
     </div>
   </form>
-  <div class="things-list-controls">
-    <select id="taskTimeRange" aria-label="待办时间范围"><option value="near">近3天</option><option value="all">全部待办</option><option value="overdue">逾期待办</option><option value="undated">未设截止</option></select>
-    <select id="taskSort" aria-label="待办排序"><option value="deadline">按截止日期</option><option value="manual">手动排序</option></select>
+  <div id="taskViewSettings" class="things-list-controls" hidden>
+    <label>时间范围<select id="taskTimeRange" aria-label="待办时间范围"><option value="near">近3天</option><option value="all">全部待办</option><option value="overdue">逾期待办</option><option value="undated">未设截止</option></select></label>
+    <label>排序方式<select id="taskSort" aria-label="待办排序"><option value="deadline">按截止日期</option><option value="manual">手动排序</option></select></label>
     <span id="taskRangeHint"></span>
   </div>
 </div>
@@ -1424,7 +1426,7 @@ function render() {
     "更新 " + (state.updated || "—").replace("T", " ").slice(0, 16);
 
   if (nOpen === 0 && buckets.done.length === 0 && buckets.suggest.length === 0) {
-    root.innerHTML = '<div class="empty">'+(taskTimeRange==='near'?'近3天暂无待办，可切换「全部待办」查看其他事项。':'当前范围暂无待办。')+'</div>';
+    root.innerHTML = '<div class="empty">'+(taskTimeRange==='near'?'近3天暂无待办，可在「设置」中切换「全部待办」查看其他事项。':'当前范围暂无待办。')+'</div>';
   }
 
   // 弹窗打开时同步刷新模板列表，保留添加表单。
@@ -2358,6 +2360,7 @@ function applyTab() {
   document.getElementById('projectsView').hidden=activeTab!=='projects';
   document.getElementById('newTaskForm').hidden=activeTab!=='things';
   document.querySelector('.app-toolbar').hidden=activeTab!=='things';
+  document.getElementById('taskViewSettings').hidden=activeTab!=='things';
   document.getElementById('coreSummary').hidden=activeTab!=='things';
   for(const tab of document.querySelectorAll('[data-tab]')) {
     tab.setAttribute('aria-selected',String(tab.dataset.tab===activeTab));
@@ -2747,6 +2750,7 @@ document.getElementById('weeklyReportGroupsForm').addEventListener('submit',asyn
 });
 const globalSettings=settingsMenu('设置',[btn('人员维护',openPeople),btn('周报接收群',openWeeklyReportGroups)]);
 globalSettings.id='globalSettings';
+globalSettings.querySelector('.action-menu-list').prepend(document.getElementById('taskViewSettings'));
 document.querySelector('.header-right').append(globalSettings);
 for(const [dialogId,formId,cancelId] of [['peopleDialog','peopleForm','peopleCancel'],['weeklyReportGroupsDialog','weeklyReportGroupsForm','weeklyReportGroupsCancel']]) {
   const dialog=document.getElementById(dialogId);

@@ -32,12 +32,18 @@ def main():
                 assert page.locator('#group-P1 .drag-handle').count()==0
                 assert page.locator('#groups [data-id=d0] .association-project-label').inner_text()=='项目'
                 assert page.locator('#group-DN [data-id=done]').count()==1
+                assert page.locator('.app-toolbar #taskTimeRange').count()==0
+                assert not page.locator('#taskTimeRange').is_visible()
+                page.locator('#globalSettings > summary').click()
+                assert page.locator('#globalSettings #taskTimeRange').is_visible()
+                assert page.locator('#globalSettings #taskSort').is_visible()
                 page.locator('#taskTimeRange').select_option('overdue');settle();assert ids()==['late']
                 page.locator('#taskTimeRange').select_option('undated');settle();assert ids()==['undated']
                 page.locator('#taskTimeRange').select_option('all');settle();assert ids()==['late','d0','recurring','d1','d2','d3','undated']
                 page.locator('#taskSort').select_option('manual');settle();assert page.locator('#group-P1 .drag-handle').count()==7
                 page.locator('#taskSort').select_option('deadline');page.locator('#taskTimeRange').select_option('near');settle()
                 page.locator('#projectsTab').click()
+                assert not page.locator('#taskViewSettings').is_visible()
                 assert page.locator('#projectDetail li.inline-task').count()==6
                 assert '1/7' in page.locator('#projectDetail .project-progress').inner_text()
                 page.locator('#thingsTab').click();assert ids()==['d0','recurring','d1','d2']
