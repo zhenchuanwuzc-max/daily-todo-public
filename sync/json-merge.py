@@ -56,11 +56,16 @@ def validate(data, *, allow_missing_tasks=False):
                 raise ValueError("done must be a boolean")
             if record.get("deleted_at") is not None and not isinstance(record["deleted_at"], str):
                 raise ValueError("deleted_at must be a timestamp or null")
-            string_fields = {"projects": ("dingtalk_group_id",),
+            string_fields = {"projects": ("dingtalk_group_id", "prd_url", "materials_url"),
                              "people": ("name", "employee_id"),
                              "weekly_report_groups": ("group_id",)}.get(name, ())
             if any(key in record and not isinstance(record[key], str) for key in string_fields):
                 raise ValueError("follow-up configuration fields must be strings")
+            if name == "projects" and "template_snapshot" in record:
+                snapshot = record["template_snapshot"]
+                if (not isinstance(snapshot, dict) or not isinstance(snapshot.get("milestones"), list)
+                        or not isinstance(snapshot.get("tasks"), list)):
+                    raise ValueError("template snapshot must contain milestone and task arrays")
     for key in ("revision", "schema_version"):
         if key in data and (isinstance(data[key], bool) or not isinstance(data[key], int) or data[key] < 0):
             raise ValueError("invalid version metadata")

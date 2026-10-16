@@ -248,6 +248,72 @@ class ProjectMergeTest(unittest.TestCase):
         self.assertEqual((result["projects"][0]["name"], result["projects"][0]["owner"]), ("Renamed", "Li"))
         self.assertEqual((result["milestones"][0]["target_date"], result["milestones"][0]["sort_order"]), ("2026-10-20", 2))
 
+    def test_template_snapshot_merges_as_one_field_independent_from_links(self):
+        base = copy.deepcopy(self.base)
+        old_snapshot = {"version": 1, "saved_at": EARLY, "name": "Template",
+                        "milestones": [{"id": "m1", "name": "Old"}], "tasks": []}
+        base["projects"][0] = edited(base["projects"][0], EARLY, template_snapshot=old_snapshot,
+                                     prd_url="https://example.invalid/old", materials_url="")
+        ours, theirs = copy.deepcopy(base), copy.deepcopy(base)
+        next_snapshot = {"version": 1, "saved_at": LATER, "name": "New template",
+                         "milestones": [{"id": "m2", "name": "New"}],
+                         "tasks": [{"id": "t2", "text": "Only in new", "milestone_id": "m2"}]}
+        ours["projects"][0] = edited(ours["projects"][0], LATER, template_snapshot=next_snapshot)
+        theirs["projects"][0] = edited(theirs["projects"][0], LATEST,
+                                       prd_url="https://example.invalid/new", materials_url="https://example.invalid/materials")
+        for first, second in ((ours, theirs), (theirs, ours)):
+            project = merge.union(first, second, base)["projects"][0]
+            self.assertEqual(project["template_snapshot"], next_snapshot)
+            self.assertEqual(project["prd_url"], "https://example.invalid/new")
+            self.assertEqual(project["materials_url"], "https://example.invalid/materials")
+        conflicting = copy.deepcopy(old_snapshot)
+        conflicting.update({"saved_at": LATEST, "name": "Other snapshot"})
+        theirs["projects"][0] = edited(theirs["projects"][0], LATEST, template_snapshot=conflicting)
+        project = merge.union(ours, theirs, base)["projects"][0]
+        self.assertEqual(project["template_snapshot"], conflicting)
+        self.assertEqual(project["template_snapshot"]["tasks"], [])
+
+    def test_template_and_links_are_optional_in_legacy_snapshots(self):
+        ours, theirs = copy.deepcopy(self.base), copy.deepcopy(self.base)
+        snapshot = {"version": 1, "saved_at": LATER, "name": "Template", "milestones": [], "tasks": []}
+        ours["projects"][0] = edited(ours["projects"][0], LATER, template_snapshot=snapshot,
+                                     prd_url="https://example.invalid/prd", materials_url="")
+        theirs["projects"][0] = edited(theirs["projects"][0], LATEST, name="Legacy edit")
+        project = merge.union(ours, theirs, self.base)["projects"][0]
+        self.assertEqual(project["template_snapshot"], snapshot)
+        self.assertEqual(project["prd_url"], "https://example.invalid/prd")
+        self.assertEqual(project["name"], "Legacy edit")
+        self.assertNotIn("template_snapshot", self.base["projects"][0])
+
+    def test_project_link_edits_and_clearing_merge_independently(self):
+        base = copy.deepcopy(self.base)
+        base["projects"][0] = edited(base["projects"][0], EARLY,
+                                      prd_url="https://example.invalid/prd", materials_url="")
+        ours, theirs = copy.deepcopy(base), copy.deepcopy(base)
+        ours["projects"][0] = edited(ours["projects"][0], LATER, prd_url="")
+        theirs["projects"][0] = edited(theirs["projects"][0], LATEST,
+                                        materials_url="https://example.invalid/materials")
+        for first, second in ((ours, theirs), (theirs, ours)):
+            result = merge.union(first, second, base)["projects"][0]
+            self.assertEqual(result["prd_url"], "")
+            self.assertEqual(result["materials_url"], "https://example.invalid/materials")
+            self.assertEqual(result["_field_updated"]["prd_url"], LATER)
+
+    def test_template_links_and_snapshot_require_valid_field_shapes(self):
+        for field in ("prd_url", "materials_url"):
+            for invalid in (123, None, True, [], {}):
+                with self.subTest(field=field, invalid=invalid):
+                    data = copy.deepcopy(self.base)
+                    data["projects"][0][field] = invalid
+                    with self.assertRaises(ValueError):
+                        merge.validate(data)
+        for invalid in (None, [], {}, {"tasks": {}, "milestones": []}, {"tasks": [], "milestones": None}):
+            with self.subTest(snapshot=invalid):
+                data = copy.deepcopy(self.base)
+                data["projects"][0]["template_snapshot"] = invalid
+                with self.assertRaises(ValueError):
+                    merge.validate(data)
+
     def test_project_soft_delete_preserves_children_and_other_edits(self):
         ours, theirs = copy.deepcopy(self.base), copy.deepcopy(self.base)
         ours["projects"][0] = edited(ours["projects"][0], LATER, deleted_at=LATER)

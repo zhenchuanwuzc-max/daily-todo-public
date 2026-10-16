@@ -221,11 +221,12 @@ def main():
             settle()
             assert first_form.locator('[name=deadline]').input_value() == today
             # The explicit picker offers the shared directory even while Ocean is prefilled.
-            picker = first_form.locator("select.person-picker-toggle")
-            assert "项目负责人" in picker.locator("option").evaluate_all("nodes => nodes.map(node => node.value)")
-            picker.select_option("项目负责人")
+            picker = first_form.locator("button.person-picker-toggle")
+            picker.click()
+            assert page.get_by_role("listbox", name="选择负责人").is_visible()
+            page.get_by_role("option", name="项目负责人", exact=True).click()
             assert first_form.locator('[name=owner]').input_value() == "项目负责人"
-            assert picker.input_value() == ""
+            assert picker.get_attribute("aria-expanded") == "false"
             first_form.locator('[name=owner]').fill("Ocean")
 
             def add_in_milestone(mid, text, owner="Ocean", deadline=today):
@@ -256,7 +257,8 @@ def main():
             assert page.locator("#projectDetail .association").count() == 0
             assert page.locator('#projectDetail [data-field=owner][list]').count() == 0
             later_row = page.locator(f'#projectDetail [data-id="{later_task["id"]}"]')
-            later_row.locator("select.person-picker-toggle").select_option("张三")
+            later_row.locator("button.person-picker-toggle").click()
+            page.get_by_role("option", name="张三", exact=True).click()
             settle()
             assert task_named(later_task["text"])["owner"] == "张三"
             arbitrary_owner = later_row.locator('[data-field=owner]')

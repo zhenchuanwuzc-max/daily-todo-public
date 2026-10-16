@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 import threading
 import hashlib
+import math
 import re
 import unicodedata
 import zipfile
@@ -939,6 +940,125 @@ def patch_task(task_id: str, patch: dict) -> dict:
     return target
 
 
+def project_link(value, field):
+    """Store only explicit web URLs; browser schemes and credential tricks are invalid."""
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be text")
+    if any(unicodedata.category(char) in ("Cc", "Cf", "Cs") for char in value):
+        raise ValueError(f"{field} cannot contain control characters")
+    value = value.strip()
+    if not value:
+        return ""
+    if len(value) > 4096 or "\\" in value or any(char.isspace() for char in value):
+        raise ValueError(f"{field} must be a valid http or https URL")
+    try:
+        parts = urlsplit(value)
+        if (parts.scheme not in ("http", "https") or not parts.hostname
+                or parts.username is not None or parts.password is not None):
+            raise ValueError()
+        _ = parts.port
+    except ValueError:
+        raise ValueError(f"{field} must be a valid http or https URL") from None
+    return value
+
+
+def _order_number(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else math.inf
+
+
+def _template_snapshot(data, project, stamp):
+    milestones = sorted((m for m in data["milestones"] if m.get("project_id") == project["id"] and not m.get("deleted_at")),
+                        key=lambda m: (_order_number(m.get("sort_order")), m.get("created") or "", m["id"]))
+    milestone_ids = {m["id"] for m in milestones}
+    tasks = [t for t in data["tasks"] if t.get("project_id") == project["id"]
+             and not any(t.get(field) for field in ("deleted_at", "recurring", "recur_source", "auto_skipped"))
+             and t.get("source") != "claude-suggest"]
+    snapshot = {"version": 1, "saved_at": stamp, "name": required_text(project.get("name"), "name"),
+                "milestones": [{"id": m["id"], "name": required_text(m.get("name"), "name"), "sort_order": index}
+                               for index, m in enumerate(milestones)], "tasks": []}
+    for milestone_id in [m["id"] for m in milestones] + [None]:
+        siblings = [t for t in tasks if (t.get("milestone_id") if t.get("milestone_id") in milestone_ids else None) == milestone_id]
+        siblings.sort(key=lambda t: (_order_number(t.get("project_sort_order")), t.get("deadline") or "9999",
+                                     t.get("created") or "", t["id"]))
+        for index, task in enumerate(siblings):
+            record = {"id": task["id"], "text": required_text(task.get("text"), "text"),
+                      "milestone_id": milestone_id, "priority": task.get("priority"), "tag": task.get("tag") or "work",
+                      "project_sort_order": index}
+            if _order_number(task.get("sort_order")) != math.inf:
+                record["sort_order"] = task["sort_order"]
+            snapshot["tasks"].append(record)
+    _validate_template_snapshot(snapshot)
+    return snapshot
+
+
+def _validate_template_snapshot(snapshot):
+    if not isinstance(snapshot, dict) or type(snapshot.get("version")) is not int or snapshot["version"] != 1:
+        raise ValueError("项目模板版本不支持，请重新保存模板")
+    required_text(snapshot.get("name"), "template name")
+    required_text(snapshot.get("saved_at"), "template saved_at")
+    identities = {}
+    for collection, label in (("milestones", "name"), ("tasks", "text")):
+        records = snapshot.get(collection)
+        if not isinstance(records, list):
+            raise ValueError("项目模板内容无效，请重新保存模板")
+        seen = set()
+        for record in records:
+            if not isinstance(record, dict):
+                raise ValueError("项目模板内容无效，请重新保存模板")
+            identity = required_text(record.get("id"), "template record id")
+            if identity in seen:
+                raise ValueError("项目模板包含重复记录，请重新保存模板")
+            seen.add(identity)
+            required_text(record.get(label), "template " + label)
+            for field in ("sort_order", "project_sort_order"):
+                if field in record and _order_number(record[field]) == math.inf:
+                    raise ValueError("项目模板排序无效，请重新保存模板")
+        identities[collection] = seen
+    for task in snapshot["tasks"]:
+        if task.get("milestone_id") is not None and task.get("milestone_id") not in identities["milestones"]:
+            raise ValueError("项目模板关联无效，请重新保存模板")
+        if task.get("priority") is not None and not isinstance(task.get("priority"), str):
+            raise ValueError("项目模板优先级无效，请重新保存模板")
+        if not isinstance(task.get("tag", "work"), str):
+            raise ValueError("项目模板分类无效，请重新保存模板")
+
+
+def save_project_template(project_id):
+    with _write_lock:
+        data = read_data()
+        project = entity_by_id(data, "projects", project_id)
+        stamp = timestamp()
+        project["template_snapshot"] = _template_snapshot(data, project, stamp)
+        stamp_fields(project, ["template_snapshot"], stamp)
+        _atomic_write_todos(data)
+    schedule_sync()
+    return project
+
+
+def _instantiate_template(data, project, source, stamp):
+    snapshot = source.get("template_snapshot")
+    _validate_template_snapshot(snapshot)
+    milestone_ids = {m["id"]: f"milestone-{uuid.uuid4().hex}" for m in snapshot["milestones"]}
+    project.update({"template_source_id": source["id"], "template_saved_at": snapshot["saved_at"]})
+    for entry in snapshot["milestones"]:
+        milestone = {"id": milestone_ids[entry["id"]], "name": entry["name"], "owner": "Ocean",
+                     "project_id": project["id"], "due": None, "deleted_at": None,
+                     "sort_order": entry.get("sort_order", 0), "created": stamp,
+                     "template_source_milestone_id": entry["id"]}
+        stamp_fields(milestone, list(milestone), stamp)
+        data["milestones"].append(milestone)
+    for index, entry in enumerate(snapshot["tasks"]):
+        task = {"id": f"task-{uuid.uuid4().hex}", "text": entry["text"], "owner": "Ocean", "deadline": None,
+                "due": None, "done": False, "done_at": None, "created": stamp, "source": "user",
+                "project_id": project["id"], "milestone_id": milestone_ids.get(entry.get("milestone_id")),
+                "priority": entry.get("priority"), "tag": entry.get("tag", "work"),
+                "project_sort_order": entry.get("project_sort_order", index), "template_source_task_id": entry["id"]}
+        if "sort_order" in entry:
+            task["sort_order"] = entry["sort_order"]
+        stamp_fields(task, list(task), stamp)
+        data["tasks"].append(task)
+
+
 def add_project(item):
     name = required_text(item.get("name"), "name")
     owner = required_text(item.get("owner", "Ocean"), "owner")
@@ -948,14 +1068,37 @@ def add_project(item):
         raise ValueError("goal must be text")
     group_id = (followup_text(item["dingtalk_group_id"], "dingtalk_group_id")
                 if "dingtalk_group_id" in item else None)
+    links = {field: project_link(item[field], field) for field in ("prd_url", "materials_url") if field in item}
+    template_id = item.get("template_id")
+    if template_id is not None and (not isinstance(template_id, str) or not template_id.strip()):
+        raise ValueError("template_id must be a project ID or null")
+    request_id = followup_text(item["request_id"], "request_id", allow_empty=False) if "request_id" in item else None
+    if template_id and not request_id:
+        raise ValueError("使用模板创建项目需要 request_id，重试时保持不变")
+    request_fields = {"name": name, "owner": owner, "goal": item.get("goal", "").strip(),
+                      "core": item.get("core", False), "template_id": template_id, **links}
+    if group_id is not None:
+        request_fields["dingtalk_group_id"] = group_id
+    fingerprint = hashlib.sha256(json.dumps(request_fields, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     with _write_lock:
         data = read_data()
+        if request_id:
+            previous = next((p for p in data["projects"] if p.get("create_request_id") == request_id), None)
+            if previous is not None:
+                if previous.get("create_request_fingerprint") != fingerprint:
+                    raise ConflictError("此 request_id 已用于不同内容，请保留原请求重试或使用新 request_id")
+                return previous
         stamp = timestamp()
         project = {"id": f"project-{uuid.uuid4().hex}", "name": name, "owner": owner,
                    "goal": item.get("goal", "").strip(), "core": item.get("core", False),
-                   "archived": False, "deleted_at": None, "created": stamp}
+                   "archived": False, "deleted_at": None, "created": stamp, **links}
         if group_id is not None:
             project["dingtalk_group_id"] = group_id
+        if template_id:
+            source = entity_by_id(data, "projects", template_id)
+            _instantiate_template(data, project, source, stamp)
+        if request_id:
+            project.update({"create_request_id": request_id, "create_request_fingerprint": fingerprint})
         stamp_fields(project, list(project), stamp)
         data["projects"].append(project)
         _atomic_write_todos(data)
@@ -984,7 +1127,7 @@ def add_milestone(item):
 
 
 def patch_entity(collection, entity_id, patch):
-    allowed = {"name", "owner", "goal", "core", "archived", "dingtalk_group_id"} if collection == "projects" else {
+    allowed = {"name", "owner", "goal", "core", "archived", "dingtalk_group_id", "prd_url", "materials_url"} if collection == "projects" else {
         "name", "owner", "due"}
     with _write_lock:
         data = read_data()
@@ -1002,6 +1145,9 @@ def patch_entity(collection, entity_id, patch):
             changes["goal"] = changes["goal"].strip()
         if "dingtalk_group_id" in changes:
             changes["dingtalk_group_id"] = followup_text(changes["dingtalk_group_id"], "dingtalk_group_id")
+        for field in ("prd_url", "materials_url"):
+            if field in changes:
+                changes[field] = project_link(changes[field], field)
         if "due" in changes:
             changes["due"] = valid_date(changes["due"], "due")
         fields = [key for key, value in changes.items() if target.get(key) != value]
@@ -1400,6 +1546,10 @@ class Handler(BaseHTTPRequestHandler):
                             "revision": read_data()["revision"]})
             elif path == "/projects/add":
                 self._entity_response("projects", add_project(self._payload()))
+            elif re.fullmatch(r"/projects/[^/]+/template", path):
+                self._payload()
+                project_id = unquote(path.strip("/").split("/")[1])
+                self._entity_response("projects", save_project_template(project_id))
             elif path == "/people/upsert":
                 self._json(upsert_people(self._payload()))
             elif path == "/weekly-report/groups":

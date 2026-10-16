@@ -64,6 +64,11 @@ change the remote URL or create a remote repository.
   with `deleted_at` tombstones for removal. An older snapshot that omits either
   new collection does not erase existing configuration. These fields only store
   configuration; sync does not send DingTalk messages or schedule weekly reports.
+- Project `prd_url` and `materials_url` merge independently, including explicit
+  empty values. A saved `template_snapshot` merges as one complete field, so a
+  conflict cannot combine milestones from one saved template with tasks from
+  another. Template-created project, milestone, and task IDs are new stable IDs;
+  the ordinary collection merge preserves them without modifying the source.
 - Bad JSON, duplicate keys/IDs, non-finite numbers, or malformed collections cause
   merge failure. The merge driver never strips conflict markers or substitutes
   the one readable side.
