@@ -655,16 +655,12 @@ body { min-width:900px; padding:16px 20px; }
 .inline-task .text { flex:1 1 auto; min-width:80px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:5px 2px; border:1px solid transparent; border-radius:4px; }
 .inline-task .text:focus { outline:0; border-color:#b5d6ce; background:var(--surface); text-overflow:clip; }
 .inline-task .owner-input { flex:0 0 66px; width:66px; }
-.inline-task .deadline-wrap { flex:0 0 136px; position:relative; display:flex; align-items:center; gap:3px; }
-.inline-task .date-status { font-size:10px; color:var(--accent); white-space:nowrap; }
-.inline-task .overdue .date-status { color:#b42318; }
+.inline-task .deadline-wrap { flex:0 0 112px; position:relative; display:flex; align-items:center; }
 .inline-task .deadline-input { width:112px; }
  .inline-task .deadline-button { display:flex; align-items:center; justify-content:center; gap:6px; min-height:32px; padding:5px 6px; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--text-2); font:inherit; font-size:13px; line-height:20px; font-variant-numeric:tabular-nums; white-space:nowrap; cursor:pointer; }
 .inline-task .deadline-button:hover,.inline-task .deadline-button[aria-expanded=true] { background:var(--hover); border-color:var(--line); }
 .inline-task .deadline-button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
 .inline-task .empty-date .deadline-button { color:var(--muted); }
-.inline-task .deadline-wrap.overdue .deadline-button { color:#b42318; background:#fdf0ed; }
-.inline-task .deadline-wrap.due-today .deadline-button { color:var(--accent); background:#edf6f2; }
 .deadline-picker { width:284px; max-width:calc(100vw - 16px); padding:12px; z-index:1100; box-shadow:0 8px 28px rgba(0,0,0,.12); }
 .deadline-picker .dp-shortcuts { display:flex; gap:6px; margin-bottom:14px; }
 .deadline-picker .dp-shortcuts button { flex:1; border:1px solid var(--line); border-radius:6px; padding:6px; font:inherit; color:var(--text-2); background:transparent; cursor:pointer; }
@@ -701,7 +697,7 @@ body { min-width:900px; padding:16px 20px; }
 :is(#projectDetail .inline-task,.project-task-preview) .text { padding:5px 6px; font-size:13px; line-height:20px; }
 :is(#projectDetail .inline-task,.project-task-preview) input:not([type=checkbox]),:is(#projectDetail .inline-task,.project-task-preview) select { height:32px; padding:5px 4px; font-size:13px; line-height:20px; }
 :is(#projectDetail .inline-task,.project-task-preview) .owner-input { flex:0 0 80px; width:80px; }
-:is(#projectDetail .inline-task,.project-task-preview) .deadline-wrap { flex-basis:156px; }
+:is(#projectDetail .inline-task,.project-task-preview) .deadline-wrap { flex-basis:132px; }
 :is(#projectDetail .inline-task,.project-task-preview) .deadline-input { width:132px; }
 :is(#projectDetail .inline-task,.project-task-preview) .pri-select { width:48px; }
 :is(#projectDetail .inline-task,.project-task-preview) .row-delete { width:24px; height:32px; }
@@ -2319,11 +2315,8 @@ function renderTask(t, {projectView=false}={}) {
   deadline.dataset.field='deadline';deadline.setAttribute('aria-label','截止日期');deadline.setAttribute('aria-haspopup','dialog');deadline.setAttribute('aria-expanded','false');
   deadline.classList.toggle('save-failed',!!dateDraft?.failed);
   dateWrap.classList.toggle('empty-date',!deadlineValue);
-  const dateStatus=!t.done&&deadlineValue?(deadlineValue<todayStr()?'逾期':deadlineValue===todayStr()?'今日到期':'截止日期'):'截止日期';
-  deadline.title=dateStatus+(deadlineValue?' · '+deadlineValue:' · 未设截止');
-  dateWrap.classList.toggle('overdue',dateStatus==='逾期');dateWrap.classList.toggle('due-today',dateStatus==='今日到期');
+  deadline.title='截止日期 · '+(deadlineValue||'未设截止');
   dateWrap.append(deadline);
-  if(dateStatus==='逾期'||dateStatus==='今日到期')dateWrap.append(el('span','date-status',dateStatus==='今日到期'?'今日':dateStatus));
   let association,associationField;
   if(!projectView) {
     association=el('select','association');association.setAttribute('aria-label','所属项目和里程碑');

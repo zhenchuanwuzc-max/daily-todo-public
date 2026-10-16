@@ -65,7 +65,8 @@ def main():
                 popup.wait_for(state='detached');settle();assert task()['deadline']=='2099-11-15'
                 trigger.click();popup.get_by_label('输入截止日期').fill('2020-01-01');popup.get_by_role('button',name='确定',exact=True).click()
                 popup.wait_for(state='detached');settle();assert task()['deadline']=='2020-01-01'
-                assert 'overdue' in row.locator('.deadline-wrap').get_attribute('class')
+                assert row.locator('.deadline-wrap').inner_text()=='2020/01/01'
+                assert row.locator('.date-status,.deadline-wrap.overdue,.deadline-wrap.due-today').count()==0
                 trigger.click();page.keyboard.press('ArrowRight');assert page.evaluate('document.activeElement.dataset.date')=='2020-01-02'
                 page.keyboard.press('Enter');popup.wait_for(state='detached');settle();assert task()['deadline']=='2020-01-02'
                 trigger.click();page.locator('#projectsTab').click();popup.wait_for(state='detached');assert task()['deadline']=='2020-01-02'

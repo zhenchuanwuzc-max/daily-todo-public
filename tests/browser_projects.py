@@ -690,7 +690,7 @@ def main():
             page.clock.pause_at("2026-10-15T23:59:55+08:00")
             page.evaluate("async () => { document.activeElement.blur(); await readState(true); }")
             assert page.locator('#groups [data-id="midnight-done"]').count() == 1
-            assert page.locator('#groups [data-id="midnight-due"] .date-status').inner_text() == "今日"
+            assert page.locator('#groups [data-id="midnight-due"] .deadline-wrap').inner_text() == "2026/10/15"
             assert page.evaluate("calendarKey(earliestMonday())") == "2026-10-05"
             page.clock.run_for(10000)
             page.evaluate("readState()")
@@ -701,7 +701,7 @@ def main():
             assert page.locator('#groups [data-id="midnight-due"]').count() == 0
             page.locator('#globalSettings > summary').click()
             page.locator('#taskTimeRange').select_option("overdue")
-            assert page.locator('#groups [data-id="midnight-due"] .date-status').inner_text() == "逾期"
+            assert page.locator('#groups [data-id="midnight-due"] .deadline-wrap').inner_text() == "2026/10/15"
             assert not errors, errors
             print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/sidebar creation, dedicated milestone-order dialog/boundaries/hidden completed records/pending+failure retry, milestone title editing/show-completed filtering+preference/no toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, default inline editing/check-uncheck/add-form draft preservation, milestone default deadline/manual override/draft preservation/no retroactive changes, shared owner picker plus free input/no project association control, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore through Things tab, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 775/920/1013/1100/1305px layout, persistence; no JS errors")
             browser.close()
