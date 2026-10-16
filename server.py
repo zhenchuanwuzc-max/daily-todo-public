@@ -1069,6 +1069,7 @@ def add_project(item):
     group_id = (followup_text(item["dingtalk_group_id"], "dingtalk_group_id")
                 if "dingtalk_group_id" in item else None)
     links = {field: project_link(item[field], field) for field in ("prd_url", "materials_url") if field in item}
+    launch_date = valid_date(item.get("launch_date"), "launch_date")
     template_id = item.get("template_id")
     if template_id is not None and (not isinstance(template_id, str) or not template_id.strip()):
         raise ValueError("template_id must be a project ID or null")
@@ -1079,6 +1080,10 @@ def add_project(item):
                       "core": item.get("core", False), "template_id": template_id, **links}
     if group_id is not None:
         request_fields["dingtalk_group_id"] = group_id
+    # Empty, null and omitted launch dates are the same optional value. Omitting
+    # it from the fingerprint also preserves retries created before this field.
+    if launch_date is not None:
+        request_fields["launch_date"] = launch_date
     fingerprint = hashlib.sha256(json.dumps(request_fields, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     with _write_lock:
         data = read_data()
@@ -1092,8 +1097,14 @@ def add_project(item):
         project = {"id": f"project-{uuid.uuid4().hex}", "name": name, "owner": owner,
                    "goal": item.get("goal", "").strip(), "core": item.get("core", False),
                    "archived": False, "deleted_at": None, "created": stamp, **links}
+        orders = [_order_number(p.get("sort_order")) for p in data["projects"]]
+        ordered = [order for order in orders if order != math.inf]
+        if ordered:
+            project["sort_order"] = max(ordered) + 1
         if group_id is not None:
             project["dingtalk_group_id"] = group_id
+        if "launch_date" in item:
+            project["launch_date"] = launch_date
         if template_id:
             source = entity_by_id(data, "projects", template_id)
             _instantiate_template(data, project, source, stamp)
@@ -1127,7 +1138,7 @@ def add_milestone(item):
 
 
 def patch_entity(collection, entity_id, patch):
-    allowed = {"name", "owner", "goal", "core", "archived", "dingtalk_group_id", "prd_url", "materials_url"} if collection == "projects" else {
+    allowed = {"name", "owner", "goal", "core", "archived", "dingtalk_group_id", "prd_url", "materials_url", "launch_date"} if collection == "projects" else {
         "name", "owner", "due"}
     with _write_lock:
         data = read_data()
@@ -1148,8 +1159,9 @@ def patch_entity(collection, entity_id, patch):
         for field in ("prd_url", "materials_url"):
             if field in changes:
                 changes[field] = project_link(changes[field], field)
-        if "due" in changes:
-            changes["due"] = valid_date(changes["due"], "due")
+        for field in ("due", "launch_date"):
+            if field in changes:
+                changes[field] = valid_date(changes[field], field)
         fields = [key for key, value in changes.items() if target.get(key) != value]
         target.update(changes)
         stamp_fields(target, fields)
@@ -1171,6 +1183,31 @@ def set_deleted(collection, entity_id, deleted=True):
         _atomic_write_todos(data)
     schedule_sync()
     return target
+
+
+def reorder_projects(item):
+    """Reorder the caller's visible projects without replacing its stale snapshot."""
+    ids = item.get("ids") if isinstance(item, dict) else None
+    if (not isinstance(ids, list) or len(ids) < 2
+            or any(not isinstance(identity, str) or not identity for identity in ids)
+            or len(ids) != len(set(ids))):
+        raise ValueError("ids must contain at least two unique project IDs")
+    with _write_lock:
+        data = read_data()
+        by_id = {project["id"]: project for project in data["projects"]}
+        selected = [by_id.get(identity) for identity in ids]
+        if any(project is None or project.get("deleted_at") or project.get("archived")
+               for project in selected):
+            raise ValueError("项目列表已变化，请刷新后重新排序")
+        # A hidden/completed project or an item added since the caller loaded is
+        # untouched. Concurrent content edits survive because we read under lock.
+        stamp = timestamp()
+        for order, project in enumerate(selected):
+            project["sort_order"] = order
+            stamp_fields(project, ["sort_order"], stamp)
+        _atomic_write_todos(data)
+    schedule_sync()
+    return {"ok": True, "updated": data["updated"], "revision": data["revision"]}
 
 
 def reorder_milestones(item):
@@ -1546,6 +1583,8 @@ class Handler(BaseHTTPRequestHandler):
                             "revision": read_data()["revision"]})
             elif path == "/projects/add":
                 self._entity_response("projects", add_project(self._payload()))
+            elif path == "/projects/reorder":
+                self._json(reorder_projects(self._payload()))
             elif re.fullmatch(r"/projects/[^/]+/template", path):
                 self._payload()
                 project_id = unquote(path.strip("/").split("/")[1])

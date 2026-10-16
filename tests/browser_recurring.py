@@ -76,6 +76,7 @@ def main():
                 def refresh_state():
                     page.evaluate("async () => { await readState(true); }")
 
+                page.add_init_script("localStorage.setItem('tracking-time-range','all');localStorage.setItem('tracking-task-sort','manual')")
                 page.goto(url)
                 page.locator('#groups [data-id="ordinary-future"]').wait_for()
                 # Planned dates remain stored, while future ordinary tasks join the sortable list.

@@ -139,6 +139,7 @@ def main():
                     assert server.read_data()["projects"] == original_projects, "Completion must not persist archive metadata"
                     assert not project_writes, f"Completion issued project mutations: {project_writes}"
 
+                page.add_init_script("localStorage.setItem('tracking-time-range','all');localStorage.setItem('tracking-task-sort','manual')")
                 page.goto(url)
                 page.wait_for_function("state.projects?.length === 6")
                 settle()

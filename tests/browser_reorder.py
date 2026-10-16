@@ -18,6 +18,7 @@ with tempfile.TemporaryDirectory() as tmp:
         page = browser.new_page(viewport={'width': 1000, 'height': 850})
         errors=[]
         page.on('pageerror', lambda error: errors.append(str(error)))
+        page.add_init_script("localStorage.setItem('tracking-time-range','all');localStorage.setItem('tracking-task-sort','manual')")
         page.goto(f'http://127.0.0.1:{httpd.server_port}')
         page.wait_for_selector('.P0 li .drag-handle')
         order=lambda: page.locator('.P0 li').evaluate_all('(rows) => rows.map(r => r.dataset.id)')

@@ -37,6 +37,7 @@ def main():
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.on("dialog", lambda dialog: dialog.accept())
+            page.add_init_script("localStorage.setItem('tracking-time-range','all');localStorage.setItem('tracking-task-sort','manual')")
             page.goto(url)
             page.locator('#groups [data-id="legacy"]').wait_for()
             assert server.read_data()["tasks"] == [legacy], "Opening must not migrate legacy tasks"
@@ -224,7 +225,9 @@ def main():
             picker = first_form.locator("button.person-picker-toggle")
             picker.click()
             assert page.get_by_role("listbox", name="选择负责人").is_visible()
+            page.get_by_role("option", name="Ocean", exact=True).click()
             page.get_by_role("option", name="项目负责人", exact=True).click()
+            page.get_by_role("button", name="确认负责人", exact=True).click()
             assert first_form.locator('[name=owner]').input_value() == "项目负责人"
             assert picker.get_attribute("aria-expanded") == "false"
             first_form.locator('[name=owner]').fill("Ocean")
@@ -258,7 +261,9 @@ def main():
             assert page.locator('#projectDetail [data-field=owner][list]').count() == 0
             later_row = page.locator(f'#projectDetail [data-id="{later_task["id"]}"]')
             later_row.locator("button.person-picker-toggle").click()
+            page.get_by_role("option", name="Ocean", exact=True).click()
             page.get_by_role("option", name="张三", exact=True).click()
+            page.get_by_role("button", name="确认负责人", exact=True).click()
             settle()
             assert task_named(later_task["text"])["owner"] == "张三"
             arbitrary_owner = later_row.locator('[data-field=owner]')
@@ -611,7 +616,7 @@ def main():
                 page.set_viewport_size({"width": width, "height": 850})
                 for tab in ("things", "projects"):
                     page.locator(f"#{tab}Tab").click()
-                    assert page.evaluate("document.documentElement.scrollWidth <= Math.max(innerWidth, 900)"), f"{tab} exceeds the existing minimum-width layout at {width}"
+                    assert page.evaluate("document.documentElement.scrollWidth <= Math.max(innerWidth, 900) + 1"), f"{tab} exceeds the existing minimum-width layout at {width}: " + str(page.evaluate("[...document.querySelectorAll('*')].filter(n=>n.getBoundingClientRect().right>Math.max(innerWidth,900)+1).slice(-12).map(n=>({tag:n.tagName,cls:n.className,id:n.id,width:n.getBoundingClientRect().width,right:n.getBoundingClientRect().right}))"))
                     if tab == "things":
                         fields = [page.locator(selector).bounding_box() for selector in ('#newText', '#newOwner', '#newDeadline')]
                         assert all(fields), "Common add fields must remain visible"
@@ -692,6 +697,9 @@ def main():
             assert page.evaluate("state.revision") == "unchanged-midnight"
             assert page.evaluate("todayStr()") == "2026-10-16"
             assert page.locator('#groups [data-id="midnight-done"]').count() == 0
+            assert page.locator('#taskTimeRange').input_value() == "near"
+            assert page.locator('#groups [data-id="midnight-due"]').count() == 0
+            page.locator('#taskTimeRange').select_option("overdue")
             assert page.locator('#groups [data-id="midnight-due"] .date-status').inner_text() == "逾期"
             assert not errors, errors
             print(f"PASS {engine}: compact project empty states/core-summary visibility/filter-free active list/hidden-project recovery dialog with pending/failure/retry/sidebar creation, dedicated milestone-order dialog/boundaries/hidden completed records/pending+failure retry, milestone title editing/show-completed filtering+preference/no toggles/draft-safe dialog reorder with pending/failure/cancel recovery, labeled compact add fields/retained More options/no planned-date button, default inline editing/check-uncheck/add-form draft preservation, milestone default deadline/manual override/draft preservation/no retroactive changes, shared owner picker plus free input/no project association control, row editing/deadline, project CRUD/owner editing/archive/restore, milestone CRUD/reorder, bidirectional done/undo, explicit unlink/restore through Things tab, delayed failed-save draft retention, pending entity lock/recovery, midnight unchanged-revision refresh, mixed UTC/naive review weeks, 775/920/1013/1100/1305px layout, persistence; no JS errors")

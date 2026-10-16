@@ -40,6 +40,7 @@ def main():
                 page = context.new_page()
                 errors = []
                 page.on("pageerror", lambda error: errors.append(str(error)))
+                page.add_init_script("localStorage.setItem('tracking-time-range','all');localStorage.setItem('tracking-task-sort','manual')")
                 page.goto(url)
                 page.locator("#groups [data-id=legacy]").wait_for()
                 page.locator("#projectsTab").click()

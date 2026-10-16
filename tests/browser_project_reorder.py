@@ -55,6 +55,7 @@ def main():
                 page.on("dialog", lambda dialog: dialog.accept())
                 page.on("request", lambda request: reorders.append(request.post_data_json)
                         if request.method == "POST" and request.url.endswith("/todos/reorder") else None)
+                page.add_init_script("localStorage.setItem('tracking-time-range','all');localStorage.setItem('tracking-task-sort','manual')")
                 page.goto(url)
                 page.locator('#groups li[data-id="t0"]').wait_for()
                 thing_order = page.locator("#groups li").evaluate_all("rows => rows.map(row => row.dataset.id)")

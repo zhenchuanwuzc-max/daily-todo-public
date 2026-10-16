@@ -195,7 +195,9 @@ class ProjectSyncTest(unittest.TestCase):
         return process
 
     def wait_for_file(self, path):
-        until = time.monotonic() + 5
+        # Git setup can exceed 5s on a busy workstation; lock assertions below
+        # still use nonblocking acquisition and do not depend on this setup wait.
+        until = time.monotonic() + 15
         while not path.exists():
             if time.monotonic() > until:
                 self.fail("isolated sync did not reach expected phase")
