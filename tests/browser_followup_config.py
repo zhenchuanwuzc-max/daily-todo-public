@@ -89,7 +89,7 @@ def main():
                     project_card(value).click(button="right")
                     context_menu.wait_for(state="visible")
                     assert entity.is_hidden(), "Right-click must open the project menu before the editor"
-                    assert context_menu.get_by_role("menuitem").all_text_contents() == ["编辑", "删除"]
+                    assert context_menu.get_by_role("menuitem").all_text_contents() == ["编辑", "新增 1 个事项", "新增 2 个事项", "删除"]
 
                 def assert_project_editor(value):
                     entity.wait_for(state="visible")
@@ -109,7 +109,7 @@ def main():
                     assert project_card(project).get_attribute("aria-current") == "true"
                     context_menu.get_by_role("menuitem", name="编辑", exact=True).click()
                     assert_project_editor(target)
-                    assert page.locator("#projectAddToggle").get_attribute("aria-pressed") == "false"
+                    assert page.locator("#projectDetail .milestone-add").count() == 0
                     cancel_entity()
                     assert Path(server.DATA_FILE).read_bytes() == snapshot
 
@@ -121,7 +121,7 @@ def main():
                 assert page.locator("#entityTitle").inner_text() == "编辑里程碑"
                 assert entity.locator('[name="name"]').input_value() == "测试节点"
                 cancel_entity()
-                assert page.locator("#projectAddToggle").get_attribute("aria-pressed") == "false"
+                assert page.locator("#projectDetail .milestone-add").count() == 0
                 assert Path(server.DATA_FILE).read_bytes() == snapshot
 
                 # Keyboard, outside click, scrolling, and viewport edges all close/place the menu.
@@ -129,9 +129,9 @@ def main():
                 page.keyboard.press("Shift+F10")
                 context_menu.wait_for(state="visible")
                 assert entity.is_hidden()
-                page.keyboard.press("ArrowDown")
+                page.keyboard.press("End")
                 assert context_menu.get_by_role("menuitem", name="删除", exact=True).evaluate("node => document.activeElement === node")
-                page.keyboard.press("ArrowUp")
+                page.keyboard.press("Home")
                 assert context_menu.get_by_role("menuitem", name="编辑", exact=True).evaluate("node => document.activeElement === node")
                 page.keyboard.press("Escape")
                 context_menu.wait_for(state="hidden")
@@ -155,7 +155,8 @@ def main():
                 page.evaluate("() => { document.getElementById('context-scroll-test').remove(); window.scrollTo(0,0); }")
 
                 # Editing another project's metadata must not discard the current add-form draft.
-                page.locator("#projectAddToggle").click()
+                page.locator("#projectDetail .milestone-title").first.click(button="right")
+                context_menu.get_by_role("menuitem", name="新增 1 个事项", exact=True).click()
                 add_form = page.locator("#projectDetail .milestone-add").first
                 add_form.locator('[name="text"]').fill("保留的新增事项草稿")
                 add_form.locator('[name="owner"]').fill("草稿负责人")
@@ -165,12 +166,12 @@ def main():
                 assert_project_editor(other)
                 entity.locator('[name="name"]').fill("取消的项目名称草稿")
                 cancel_entity()
-                assert page.locator("#projectAddToggle").get_attribute("aria-pressed") == "true"
+                assert page.locator("#projectDetail .milestone-add").count() == 1
                 assert add_form.locator('[name="text"]').input_value() == "保留的新增事项草稿"
                 assert add_form.locator('[name="owner"]').input_value() == "草稿负责人"
                 assert add_form.locator('[name="deadline"]').input_value() == "2099-12-30"
                 assert Path(server.DATA_FILE).read_bytes() == snapshot
-                page.locator("#projectAddToggle").click()
+                add_form.get_by_role("button", name="取消新增事项", exact=True).click()
                 settle()
 
                 # Menu deletion can be cancelled; accepted deletion remains recoverable.

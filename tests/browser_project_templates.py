@@ -130,7 +130,7 @@ def main():
                 assert not any(m['project_id']==basic['id'] for m in server.read_data()['milestones'])
                 assert not any(t.get('project_id')==basic['id'] for t in server.read_data()['tasks'])
                 assert page.locator('#projectDetail .milestone-head').count()==0
-                page.locator('#projectAddToggle').click()
+                page.locator('#projectDetail .project-heading h2').click(button='right');page.get_by_role('menuitem',name='新增 1 个事项',exact=True).click()
                 add=page.locator('#projectDetail .milestone-add')
                 add.locator('[name=text]').fill('直接跟进事项')
                 add.locator('[name=deadline]').fill('2099-10-18')

@@ -87,7 +87,7 @@ def main():
                 calendar.get_by_role('button',name='下周',exact=True).click()
                 assert launch.input_value()==(date.fromisoformat(server.today_str())+timedelta(days=7)).isoformat()
                 page.locator('#entityCancel').click();settle();assert not server.read_data()['projects'][0].get('launch_date')
-                page.locator('#projectAddToggle').click();add=page.locator('.milestone-add').first;add.locator('[name=deadline]').click()
+                page.locator('.milestone-title').first.click(button='right');page.get_by_role('menuitem',name='新增 1 个事项',exact=True).click();add=page.locator('.milestone-add').first;add.locator('[name=deadline]').click()
                 page.get_by_role('dialog',name='选择截止日期',exact=True).get_by_role('button',name='明天',exact=True).click()
                 assert add.locator('[name=deadline]').input_value()==tomorrow
                 page.locator('#thingsTab').click();page.locator('#newDeadline').click()

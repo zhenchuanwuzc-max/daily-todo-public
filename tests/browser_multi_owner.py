@@ -52,7 +52,7 @@ def main():
                 assert field.input_value()=='甲、乙、Ocean' and 'save-failed' in field.get_attribute('class')
                 assert task()['owner']=='甲、乙'
                 page.unroute('**/todos/t');field.focus();field.press('Enter');settle();assert task()['owner']=='甲、乙、Ocean'
-                page.locator('#projectAddToggle').click();form=page.locator('.milestone-add').first
+                page.locator('.milestone-title').first.click(button='right');page.get_by_role('menuitem',name='新增 1 个事项',exact=True).click();form=page.locator('.milestone-add').first
                 form.locator('[name=text]').fill('多人新增')
                 form.locator('.person-picker-toggle').click();box.get_by_role('option',name='甲',exact=True).click();popup.get_by_role('button',name='确认负责人',exact=True).click()
                 form.get_by_role('button',name='添加',exact=True).click();settle()

@@ -194,10 +194,9 @@ def main():
 
                 # Adding unfinished work from the completed project also restores it.
                 open_completed("main")
-                add_toggle = page.locator("#projectAddToggle")
-                if add_toggle.inner_text().strip() == "新增事项":
-                    add_toggle.click()
-                    settle()
+                page.locator('section[data-milestone-id="main-first"] .milestone-title').click(button="right")
+                page.get_by_role("menuitem", name="新增 1 个事项", exact=True).click()
+                settle()
                 form = page.locator('form.milestone-add[data-milestone-id="main-first"]')
                 form.locator('[name=text]').fill("完成后追加事项")
                 form.locator('[name=deadline]').fill(today)

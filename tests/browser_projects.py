@@ -58,15 +58,25 @@ def main():
                 page.evaluate("document.activeElement?.blur()")
                 page.wait_for_function("mutationCount === 0 && !renderPending")
 
-            def ensure_project_add():
-                toggle = page.locator("#projectAddToggle")
-                if toggle.inner_text().strip() == "新增事项":
-                    toggle.click()
+            def ensure_project_add(mid=None):
+                if mid is None:
+                    section = page.locator('#projectDetail section[data-milestone-id]').first
+                    mid = section.get_attribute('data-milestone-id') if section.count() else ''
+                form = page.locator(f'form.milestone-add[data-milestone-id="{mid}"]')
+                if not form.count():
+                    target = page.locator(f'section[data-milestone-id="{mid}"] .milestone-title') if mid else page.locator('#projectDetail .project-heading h2')
+                    target.click(button='right')
+                    page.get_by_role('menuitem', name='新增 1 个事项', exact=True).click()
                     settle()
-                assert toggle.inner_text().strip() == "收起新增"
+                assert form.count() == 1
+
+            def cancel_project_add():
+                while page.locator('#projectDetail .cancel-add').count():
+                    page.locator('#projectDetail .cancel-add').first.click()
+                    settle()
 
             def assert_project_add_hidden():
-                assert page.locator("#projectAddToggle").inner_text().strip() == "新增事项"
+                assert page.locator("#projectAddToggle").count() == 0
                 assert page.locator("#projectDetail .milestone-add").count() == 0
 
             def assert_compact_sticky_heading():
@@ -182,7 +192,6 @@ def main():
             assert page.locator('.milestone:not([data-milestone-id])').count() == 1
             assert_project_add_hidden()
             assert not set(page.locator(".project-actions .action-menu-list button").all_text_contents()) & {"编辑", "归档"}
-            ensure_project_add()
             assert_menu_dismissal(".project-actions")
             page.locator("#thingsTab").click()
             assert page.locator("#coreSummary").is_visible()
@@ -211,6 +220,8 @@ def main():
             # New rows inherit only the milestone's current date; an undated milestone stays blank.
             first_form = page.locator(f'form.milestone-add[data-milestone-id="{first}"]')
             second_form = page.locator(f'form.milestone-add[data-milestone-id="{second}"]')
+            ensure_project_add(first)
+            ensure_project_add(second)
             assert first_form.locator('[name=deadline]').input_value() == ""
             assert second_form.locator('[name=deadline]').input_value() == ""
             assert first_form.locator('[name=owner]').get_attribute("list") is None
@@ -220,6 +231,9 @@ def main():
             assert response.ok, response.text()
             page.evaluate("readState(true)")
             settle()
+            assert first_form.locator('[name=deadline]').input_value() == "", "Already opened drafts keep their original date"
+            first_form.locator('.cancel-add').click()
+            ensure_project_add(first)
             assert first_form.locator('[name=deadline]').input_value() == today
             # The explicit picker offers the shared directory even while Ocean is prefilled.
             picker = first_form.locator("button.person-picker-toggle")
@@ -233,7 +247,7 @@ def main():
             first_form.locator('[name=owner]').fill("Ocean")
 
             def add_in_milestone(mid, text, owner="Ocean", deadline=today):
-                ensure_project_add()
+                ensure_project_add(mid)
                 form = page.locator(f'form.milestone-add[data-milestone-id="{mid}"]')
                 assert form.locator('[name=owner]').input_value() == "Ocean"
                 assert form.locator('[name=owner]').get_attribute("list") is None
@@ -247,11 +261,15 @@ def main():
 
             first_task = add_in_milestone(first, "核对方案并完成评审", "张三", deadline=None)
             assert first_task["deadline"] == today
+            assert first_form.count() == 0, "Successful entry closes only its own draft"
+            ensure_project_add(first)
             assert first_form.locator('[name=deadline]').input_value() == today, "A successful add must restore the milestone date"
             second_task = add_in_milestone(first, "完成交互验收", deadline="2099-12-31")
             assert second_task["deadline"] == "2099-12-31"
+            ensure_project_add(first)
             assert first_form.locator('[name=deadline]').input_value() == today, "A manual override must not become the next row's default"
             later_task = add_in_milestone(second, "发布前检查", deadline="2099-12-31")
+            ensure_project_add(second)
             assert second_form.locator('[name=deadline]').input_value() == "", "An undated milestone must reset to an empty date"
             assert first_task["project_id"] == project_id and first_task["milestone_id"] == first
             assert "0/2 完成" in page.locator(f'section[data-milestone-id="{first}"]').inner_text()
@@ -276,10 +294,9 @@ def main():
             first_form.locator('[name=text]').fill("尚未保存的新增草稿")
             first_form.locator('[name=owner]').fill("手写草稿负责人")
             first_form.locator('[name=deadline]').fill("2099-12-20")
-            page.locator("#projectAddToggle").click()
+            page.locator("#thingsTab").click()
+            page.locator("#projectsTab").click()
             settle()
-            assert_project_add_hidden()
-            ensure_project_add()
             assert first_form.locator('[name=text]').input_value() == "尚未保存的新增草稿"
             assert first_form.locator('[name=owner]').input_value() == "手写草稿负责人"
             assert first_form.locator('[name=deadline]').input_value() == "2099-12-20"
@@ -305,7 +322,7 @@ def main():
             page.locator(f'section[data-milestone-id="{first}"] .milestone-title').click()
             page.locator("#entityDialog").wait_for(state="visible")
             assert page.locator("#entityTitle").inner_text() == "编辑里程碑"
-            assert page.locator("#projectAddToggle").inner_text().strip() == "新增事项", "Editing milestone metadata must keep the add-form toggle unchanged"
+            assert_project_add_hidden()
             page.locator("#entityCancel").click()
             settle()
             view_checkbox = page.locator(f'#projectDetail [data-id="{first_task["id"]}"] input[type=checkbox]')
@@ -320,8 +337,10 @@ def main():
             assert task_named(first_task["text"])["done"] is False
             assert_project_add_hidden()
             ensure_project_add()
+            ensure_project_add(second)
             assert first_form.locator('[name=deadline]').input_value() == "2099-12-22"
             assert second_form.locator('[name=deadline]').input_value() == ""
+            cancel_project_add()
 
             # Same item in both views; deadline is not a scheduled start date.
             page.locator("#thingsTab").click()
@@ -625,13 +644,13 @@ def main():
                             overlap_y = min(left['y'] + left['height'], right['y'] + right['height']) - max(left['y'], right['y'])
                             assert overlap_x <= 0 or overlap_y <= 0, f"Common fields overlap at {width}px"
                     else:
+                        ensure_project_add()
                         assert page.locator("#projectDetail .association").count() == 0
                         assert page.locator("#projectDetail .milestone-add").evaluate_all("nodes => nodes.every(node => node.scrollWidth <= node.clientWidth + 1)"), f"Milestone add form overflow at {width}px"
                     if width in (775, 1013, 1305):
                         page.screenshot(path=str(output / f"milestone-entry-{tab}-{engine}-{width}.png"), full_page=True)
                         if tab == "projects":
-                            page.locator("#projectAddToggle").click()
-                            settle()
+                            cancel_project_add()
                             assert_project_add_hidden()
                             page.screenshot(path=str(output / f"milestone-view-projects-{engine}-{width}.png"), full_page=True)
                             ensure_project_add()

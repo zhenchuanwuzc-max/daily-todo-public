@@ -81,19 +81,20 @@ def main():
                 assert server.read_data()['milestones'] == fixture['milestones']
                 # Project context menu continues to work alongside drag/click handling.
                 row('p0').click(button='right');menu=page.get_by_role('menu',name='项目操作')
-                assert menu.get_by_role('menuitem').all_text_contents()==['编辑','删除']
+                assert menu.get_by_role('menuitem').all_text_contents()==['编辑','新增 1 个事项','新增 2 个事项','删除']
                 page.keyboard.press('Escape');assert row('p0').evaluate('n=>n===document.activeElement')
                 # Right-click title or milestone heading gives explicit actions, never an immediate edit.
                 title=page.locator('[data-milestone-id=m] .milestone-title')
                 title.click(button='right');menu=page.get_by_role('menu',name='里程碑操作')
-                assert menu.get_by_role('menuitem').all_text_contents()==['编辑','删除']
+                assert menu.get_by_role('menuitem').all_text_contents()==['编辑','新增 1 个事项','新增 2 个事项','删除']
                 assert not page.locator('#entityDialog').is_visible()
                 menu.get_by_role('menuitem',name='编辑',exact=True).click()
                 assert page.locator('#entityTitle').inner_text()=='编辑里程碑'
                 page.locator('#entityCancel').click();settle()
                 title.focus();page.keyboard.press('Shift+F10')
                 assert menu.is_visible()
-                page.keyboard.press('Escape');assert title.evaluate('n=>n===document.activeElement'), page.evaluate('({active:document.activeElement.outerHTML, pending:renderPending, hidden:document.getElementById("projectContextMenu").hidden, anchor:projectContextAnchor?.outerHTML})')
+                page.evaluate('renderPending=true')  # A pending refresh must not steal restored focus.
+                page.keyboard.press('Escape');assert title.evaluate('n=>n===document.activeElement'), page.evaluate('({active:document.activeElement.tagName, pending:renderPending, hidden:document.getElementById("projectContextMenu").hidden, anchor:projectContextAnchor?.outerHTML})')
                 title.click();assert page.locator('#entityTitle').inner_text()=='编辑里程碑'
                 page.locator('#entityCancel').click();settle()
                 page.once('dialog',lambda dialog:dialog.dismiss())
