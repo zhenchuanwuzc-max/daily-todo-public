@@ -1,4 +1,4 @@
-# 每日待办 1.1.1 · 项目跟进版
+# 每日待办 1.1.2 · 项目跟进版
 
 事情跟进和项目跟进共用事项，支持项目、多个里程碑、负责人和截止日期，以及删除恢复和可复用任务模板。
 
@@ -10,25 +10,26 @@
 - 左侧项目支持拖动排序；右键项目或里程碑可选择编辑、删除。
 - 项目增加独立的预计上线时间，支持 PRD、运营物料链接和模板。
 - 新接口与安装包同步更新，修复旧服务未加载新路由导致的保存 `not found`。
+- 补齐 HTTP 响应长度，确保不同 Python 版本的客户端可完整读取非法来源请求的拒绝提示。
 
 ## 安装
 
 这是手动安装的项目版预发布，不触发旧正式版自动更新。安装包不含个人事项、人员工号或私有数据仓库；已有数据继续存于本机的私有数据目录。
 
-Apple Silicon（M 系列）下载 `daily-todo-1.1.1-macos-arm64.zip`；Intel Mac 下载 `daily-todo-1.1.1-macos-x86_64.zip`。可用对应的 `SHA256SUMS` 文件校验下载包。
+Apple Silicon（M 系列）下载 `daily-todo-1.1.2-macos-arm64.zip`；Intel Mac 下载 `daily-todo-1.1.2-macos-x86_64.zip`。可用对应的 `SHA256SUMS` 文件校验下载包。
 
 已有私有数据仓库的设备，将这一版本源码放在本机开发目录，解压安装包至源码下的 `dist/`，然后运行配套安装器：
 
 ```bash
-git clone --branch v1.1.1 https://github.com/zhenchuanwuzc-max/daily-todo-public.git ~/Developer/Ocean/daily-todo-project-tracking
+git clone --branch v1.1.2 https://github.com/zhenchuanwuzc-max/daily-todo-public.git ~/Developer/Ocean/daily-todo-project-tracking
 cd ~/Developer/Ocean/daily-todo-project-tracking
 mkdir -p dist
 # Intel Mac 将文件名中的 arm64 换为 x86_64。
-ditto -x -k ~/Downloads/daily-todo-1.1.1-macos-arm64.zip dist
+ditto -x -k ~/Downloads/daily-todo-1.1.2-macos-arm64.zip dist
 python3 scripts/install-local.py --install
 ```
 
-若已有该源码目录，请保留本地修改并切换到 `v1.1.1`，不要覆盖目录。安装器会备份旧应用、数据和启动配置，并一起更新三个同步脚本。安装后此源码目录用于运行本地服务，需保留在原处。
+若已有该源码目录，请保留本地修改并切换到 `v1.1.2`，不要覆盖目录。安装器会备份旧应用、数据和启动配置，并一起更新三个同步脚本。安装后此源码目录用于运行本地服务，需保留在原处。
 
 所有使用同一私有数据仓库的 Mac 都需要升级应用和同步脚本后再编辑项目数据，不能混用旧写入端。详细说明见仓库内 `sync/DEPLOY.md`。
 

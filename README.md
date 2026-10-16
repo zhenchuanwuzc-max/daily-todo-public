@@ -1,6 +1,6 @@
 # daily-todo
 
-## Project tracking branch (1.1.1)
+## Project tracking branch (1.1.2)
 
 This branch adds **事情跟进 / 项目跟进** tabs using one task store. Tasks have
 inline owners and deadlines; projects and milestones support recovery after
@@ -15,7 +15,7 @@ python3 scripts/preview.py
 Open the printed localhost URL. See [project tracking usage](docs/PROJECT_TRACKING.md)
 for controls, verification and local installation. This branch is distributed as
 a manual-install prerelease; it does not use the public automatic updater.
-See [1.1.1 release and installation notes](docs/RELEASE-1.1.1.md).
+See [1.1.2 release and installation notes](docs/RELEASE-1.1.2.md).
 
 A tiny, local-first **daily todo** web app — one JSON file is the source of truth, a small Python server serves a single HTML page, and multi-device sync runs over a **private** Git repo with conflict-free JSON merging.
 

@@ -1450,12 +1450,15 @@ def _start_fallback_timer() -> None:
 
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype="application/json"):
-        self.send_response(code)
-        self.send_header("Content-Type", f"{ctype}; charset=utf-8")
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
         if isinstance(body, str):
             body = body.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", f"{ctype}; charset=utf-8")
+        # Rejected requests can leave an unread request body and close with a
+        # TCP reset. Frame the response so clients need not read until EOF.
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
         self.wfile.write(body)
 
     def _json(self, body, code=200):

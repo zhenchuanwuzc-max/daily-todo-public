@@ -245,7 +245,11 @@ for n in range(8):
             except urllib.error.HTTPError as exc:
                 response = exc
             with response:
-                self.assertEqual(response.status, expected, response.read())
+                result = response.read()
+                self.assertEqual(response.status, expected, result)
+                self.assertEqual(int(response.headers['Content-Length']), len(result))
+                if expected >= 400:
+                    self.assertTrue(json.loads(result)['error'])
                 self.assertIsNone(response.headers.get("Access-Control-Allow-Origin"))
         raw({"Origin": "https://unrelated.example", "Content-Type": "text/plain"}, 403)
         raw({"Origin": "https://unrelated.example", "Content-Type": "application/json"}, 403)
