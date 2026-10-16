@@ -43,6 +43,10 @@ def main():
                 page.goto(url)
                 page.wait_for_function('state.projects?.length===1')
                 page.locator('#projectsTab').click()
+                page.locator('#newProjectBtn').click()
+                assert page.locator('#entityTemplateLabel').is_visible()
+                assert page.locator('#entityTemplate option:checked').inner_text()=='基础模板（无里程碑）'
+                page.locator('#entityCancel').click()
                 menu('保存为任务模板')
                 settle()
                 assert server.read_data()['projects'][0]['template_snapshot']['tasks'][0]['text']=='模板事项'
@@ -116,6 +120,28 @@ def main():
                 page.locator('#thingsTab').click()
                 assert page.locator('#groups .inline-task .text').first.evaluate('node=>getComputedStyle(node).fontSize')=='13px'
                 assert page.locator('#groups .owner-input').first.evaluate('node=>getComputedStyle(node).fontSize')=='13px'
+                page.locator('#projectsTab').click()
+                page.locator('#newProjectBtn').click()
+                form.locator('[name=template_id]').select_option('')
+                form.locator('[name=name]').fill('基础项目')
+                form.get_by_role('button',name='保存',exact=True).click()
+                page.locator('#entityDialog').wait_for(state='hidden');settle()
+                basic=next(p for p in server.read_data()['projects'] if p['name']=='基础项目')
+                assert not any(m['project_id']==basic['id'] for m in server.read_data()['milestones'])
+                assert not any(t.get('project_id')==basic['id'] for t in server.read_data()['tasks'])
+                assert page.locator('#projectDetail .milestone-head').count()==0
+                page.locator('#projectAddToggle').click()
+                add=page.locator('#projectDetail .milestone-add')
+                add.locator('[name=text]').fill('直接跟进事项')
+                add.locator('[name=deadline]').fill('2099-10-18')
+                add.get_by_role('button',name='添加',exact=True).click();settle()
+                direct=next(t for t in server.read_data()['tasks'] if t.get('project_id')==basic['id'])
+                assert not direct.get('milestone_id') and direct['text']=='直接跟进事项'
+                page.reload()
+                page.locator(f'#projectList [data-project-id="{basic["id"]}"]').click()
+                page.locator(f'#projectDetail [data-id="{direct["id"]}"]').wait_for()
+                assert page.locator('#projectDetail .milestone-head').count()==0
+                assert '里程碑' not in page.locator('#projectDetail .project-progress').inner_text()
                 assert not errors,errors
                 print(f'PASS {engine}: frozen template/new project/links and validation/clear/refresh/owner input and spacious picker/696px bounds/uniform row fonts')
                 browser.close()

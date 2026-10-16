@@ -2862,10 +2862,10 @@ function openEntity(kind, entity=null, project=null) {
   document.getElementById('entityMaterialsLabel').hidden=kind!=='project';
   const templates=state.projects.filter(p=>!p.deleted_at&&p.template_snapshot).sort((a,b)=>(b.template_snapshot.saved_at||'').localeCompare(a.template_snapshot.saved_at||''));
   const select=f.elements.template_id;select.replaceChildren();
-  const blank=el('option','','空白项目');blank.value='';select.append(blank);
+  const blank=el('option','','基础模板（无里程碑）');blank.value='';select.append(blank);
   for(const p of templates){const option=el('option','',p.template_snapshot.name||p.name);option.value=p.id;select.append(option);}
   select.value=!entity&&kind==='project'?templates[0]?.id||'':'';
-  document.getElementById('entityTemplateLabel').hidden=kind!=='project'||!!entity||!templates.length;
+  document.getElementById('entityTemplateLabel').hidden=kind!=='project'||!!entity;
   updateTemplateHint();
   dialogContext.baseline=Object.fromEntries(['name','owner','goal','dingtalk_group_id','prd_url','materials_url'].map(field=>[field,f.elements[field].value.trim()]));
   Object.assign(dialogContext.baseline,{core:f.elements.core.checked,due:f.elements.due.value||null,launch_date:f.elements.launch_date.value||null});
@@ -2876,7 +2876,7 @@ function openEntity(kind, entity=null, project=null) {
 }
 function updateTemplateHint() {
   const source=projectById(document.getElementById('entityTemplate').value),snapshot=source?.template_snapshot;
-  document.getElementById('entityTemplateHint').textContent=snapshot?`${snapshot.milestones.length} 个里程碑 · ${snapshot.tasks.length} 项。负责人默认 Ocean，日期重新安排。`:'';
+  document.getElementById('entityTemplateHint').textContent=snapshot?`${snapshot.milestones.length} 个里程碑 · ${snapshot.tasks.length} 项。负责人默认 Ocean，日期重新安排。`:'直接添加事项，不预设里程碑和待办。';
 }
 document.getElementById('entityTemplate').addEventListener('change',updateTemplateHint);
 function renderEntityMilestoneActions() {
@@ -2997,7 +2997,7 @@ function renderMilestone(p,m) {
   header.append(heading);
   const metaText=[m?.owner||p.owner||'Ocean',m?.due||'',tasks.length?`${tasks.filter(t=>t.done).length}/${tasks.length} 完成`:''].filter(Boolean).join(' · ');
   header.append(el('span','milestone-meta',metaText));
-  section.append(header);
+  if(m||projectMilestones(p).length)section.append(header);
   const body=el('div');
   const ul=el('ul');ul.dataset.projectId=p.id;ul.dataset.milestoneId=m?.id||'';
   for(const t of tasks)if(showCompletedProjectItems||!t.done){const row=renderTask(t,{projectView:true});ul.append(row);addDragHandle(row,true);}
@@ -3056,8 +3056,8 @@ function renderProjectDetail() {
   if(p.deleted_at){root.append(el('p','project-hint','项目在回收站；事项仍保留在「事情跟进」。恢复项目后恢复尚未调整的关联。'));return;}
   const progress=projectProgress(p);
   const summary=el('div','project-progress');
-  summary.append(el('b','',projectComplete(p)?'已完成':`当前：${progress.current?.name||(progress.milestones.length?'里程碑已完成':'待建里程碑')}`),el('span','',`${progress.done}/${progress.tasks.length} 项完成 · ${progress.milestonesDone}/${progress.milestones.length} 个里程碑完成`));
-  if(progress.next)summary.append(el('span','','下一步：'+progress.next.text));
+  summary.append(el('b','',projectComplete(p)?'已完成':progress.milestones.length?`当前：${progress.current?.name||'里程碑已完成'}`:'进行中'),el('span','',`${progress.done}/${progress.tasks.length} 项完成`+(progress.milestones.length?` · ${progress.milestonesDone}/${progress.milestones.length} 个里程碑完成`:'')));
+  if(progress.milestones.length&&progress.next)summary.append(el('span','','下一步：'+progress.next.text));
   if(progress.overdue)summary.append(el('span','overdue-text',progress.overdue+' 项逾期'));
   if(progress.tasks.length)root.append(summary);
   progress.milestones.forEach(m=>{const section=renderMilestone(p,m);if(section)root.append(section);});
