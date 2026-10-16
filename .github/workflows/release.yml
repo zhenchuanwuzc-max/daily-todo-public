@@ -9,13 +9,21 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: macos-15
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
@@ -41,16 +49,51 @@ jobs:
           test "$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")" = "${GITHUB_REF_NAME#v}"
           cmp server.py "$app/Contents/Resources/server.py"
           cmp index.html "$app/Contents/Resources/index.html"
-          python -c "import zipfile; z=zipfile.ZipFile('$app/Contents/Resources/lib/python39.zip'); assert b'fetch_public_release' in z.read('server.pyc'), 'updater fix missing from embedded server module'"
-          lipo -archs "$app/Contents/MacOS/每日待办" | grep -q 'x86_64'
-          lipo -archs "$app/Contents/MacOS/每日待办" | grep -q 'arm64'
+          python - <<'PY'
+          from pathlib import Path
+          import platform, subprocess, zipfile
+          root = Path('dist/每日待办.app/Contents')
+          expected = '${{ matrix.arch }}'
+          assert platform.machine() == expected
+          archive, = (root / 'Resources/lib').glob('python*.zip')
+          with zipfile.ZipFile(archive) as z:
+              embedded = z.read('server.pyc')
+              assert b'reorder_projects' in embedded and b'launch_date' in embedded
+          binaries = 0
+          for path in root.rglob('*'):
+              if not path.is_file() or path.is_symlink():
+                  continue
+              if 'Mach-O' in subprocess.check_output(['file', '-b', str(path)], text=True):
+                  arches = subprocess.check_output(['lipo', '-archs', str(path)], text=True).split()
+                  assert expected in arches, (str(path), arches)
+                  binaries += 1
+          assert binaries > 1, 'Native runtime was not packaged'
+          PY
           codesign --verify --deep --strict "$app"
-          ditto -c -k --sequesterRsrc --keepParent "$app" "daily-todo-${GITHUB_REF_NAME#v}-macos-universal.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "daily-todo-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}.zip"
+          shasum -a 256 daily-todo-*-macos-${{ matrix.arch }}.zip > SHA256SUMS-${{ matrix.arch }}.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: |
+            daily-todo-*-macos-${{ matrix.arch }}.zip
+            SHA256SUMS-${{ matrix.arch }}.txt
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: daily-todo-*-macos-universal.zip
-          body: |
-            修复“立即更新”因 GitHub 匿名 API 限流而返回 HTTP 403 的问题。
-            公开版本改用 Release 页面获取版本和安装包，并在安装前校验 SHA-256。
-            本版从源码重新打包，确保 App 实际运行的内嵌 Python 模块也包含修复。
+          name: 每日待办 ${{ github.ref_name }} · 项目跟进版
+          prerelease: true
+          make_latest: false
+          fail_on_unmatched_files: true
+          files: release-assets/*
+          body_path: docs/RELEASE-1.1.1.md
