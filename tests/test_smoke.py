@@ -71,6 +71,8 @@ class SmokeTest(unittest.TestCase):
             "TODO_PORT": str(self.port),
             "HOME": self.home,
             "PYTHONUNBUFFERED": "1",
+            "TODO_DISABLE_SYNC": "1",
+            "TODO_DISABLE_UPDATE": "1",
             "PYTHONFAULTHANDLER": "1",  # 卡住时 SIGABRT 能打印调用栈
         })
         env.pop("PYTHONPATH", None)
@@ -147,7 +149,7 @@ class SmokeTest(unittest.TestCase):
         return json.loads(body)["tasks"]
 
     def add(self, text, **extra):
-        status, _, body = self.call("POST", "/todos/add", {"text": text, **extra})
+        status, _, body = self.call("POST", "/todos/add", {"text": text, "deadline": "2099-12-20", **extra})
         self.assertEqual(status, 200, body)
         return json.loads(body)
 
@@ -168,7 +170,9 @@ class SmokeTest(unittest.TestCase):
         self.assertTrue(res["ok"])
         self.assertFalse(res["deduped"])
         task = res["task"]
-        self.assertTrue(task["id"].startswith("claude-"))
+        self.assertTrue(task["id"])
+        self.assertEqual(task["deadline"], "2099-12-20")
+        self.assertEqual(task["owner"], "Ocean")
         self.assertFalse(task["done"])
         tasks = {t["id"]: t for t in self.get_tasks()}
         self.assertIn(task["id"], tasks)
@@ -177,13 +181,13 @@ class SmokeTest(unittest.TestCase):
         with open(os.path.join(self.data_dir, "todos.json"), encoding="utf-8") as f:
             self.assertIn(task["id"], [t["id"] for t in json.load(f)["tasks"]])
 
-    def test_add_same_text_is_deduped(self):
+    def test_same_text_creates_independent_project_ready_tasks(self):
         first = self.add("冒烟：去重")
-        second = self.add("冒烟： 去重")  # 空格差异也应判重
+        second = self.add("冒烟： 去重")  # 同名事项可能用于不同项目，不合并
         self.assertFalse(first["deduped"])
-        self.assertTrue(second["deduped"])
-        self.assertEqual(first["task"]["id"], second["task"]["id"])
-        self.assertEqual(sum(1 for t in self.get_tasks() if t["text"].replace(" ", "") == "冒烟：去重"), 1)
+        self.assertFalse(second["deduped"])
+        self.assertNotEqual(first["task"]["id"], second["task"]["id"])
+        self.assertEqual(sum(1 for t in self.get_tasks() if t["text"].replace(" ", "") == "冒烟：去重"), 2)
 
     def test_add_empty_text_rejected(self):
         status, _, _ = self.call("POST", "/todos/add", {"text": "   "})

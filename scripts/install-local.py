@@ -160,7 +160,7 @@ def main():
             try:
                 with urllib.request.urlopen("http://127.0.0.1:8766/health", timeout=1) as response:
                     health = json.load(response)
-                if (health.get("channel") == "project-preview"
+                if (health.get("channel") == "stable"
                         and health.get("version") == plan["version"]
                         and health.get("data_file") == str(DATA / "todos.json")
                         and health.get("preview") is False):

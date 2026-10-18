@@ -6,6 +6,27 @@ change the remote URL or create a remote repository.
 
 ## Install on each device
 
+For the 1.2.0 stable release, prefer the application migration instead of copying
+helpers manually. The universal package contains all three sync helpers. Existing
+1.0.22 users can use Check for Updates; 1.1.4 preview users must run
+`scripts/release.sh --install 1.2.0` once from the 1.2.0 source checkout. The latter
+verifies SHA-256 and the application signature, saves the previous app, and uses
+the current transactional updater even when the old bundle has no updater module.
+
+On its first stable launch the installed app validates existing service arguments
+and the configured data directory, waits for active sync work, saves configuration,
+helpers, the Git index and a data snapshot, installs the bundled helpers, and
+switches launchd to the installed app's `--server-only` entry point. It preserves
+the remote and does not rewrite `todos.json`. An unfinished Git operation, unknown
+listener or unrecognized service configuration stops migration with an error.
+App backups are under `~/Library/Application Support/daily-todo/update-backups/`;
+service migration backups are under `runtime-backups/`. Failed upgrades restore
+application/configuration without overwriting newer task edits. The old 1.0.22
+updater itself does not provide this new app-backup transaction; use the manual
+install command when that backup is required.
+
+The following manual procedure remains for controlled source deployments:
+
 1. Upgrade the app's writer first: all mutations must hold the exclusive fcntl
    lock at `TODO_DATA_DIR/.data.lock`, use stable record IDs, preserve unfamiliar
    fields/collections, and stamp touched fields in `_field_updated` plus

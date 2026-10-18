@@ -6,7 +6,10 @@ daily-todo 桌面 App 主入口（py2app 打包入口）
 """
 import os
 import json
+from html import escape
+from pathlib import Path
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -19,9 +22,10 @@ URL = f"http://localhost:{PORT}"
 SYNC_SH = os.path.join(server.DATA_DIR, "sync.sh")
 
 
-def sync_pull_blocking(timeout: int = 8) -> None:
+def sync_pull_blocking(timeout: int = 8, environment=None) -> None:
     """启动时同步阻塞跑一次（拉远端），失败不抛"""
-    if os.environ.get("TODO_DISABLE_SYNC") == "1" or not os.path.exists(SYNC_SH):
+    environment = dict(os.environ, **(environment or {}))
+    if environment.get("TODO_DISABLE_SYNC") == "1" or not os.path.exists(SYNC_SH):
         return
     try:
         subprocess.run(
@@ -29,6 +33,7 @@ def sync_pull_blocking(timeout: int = 8) -> None:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             cwd=os.path.dirname(SYNC_SH),
+            env=environment,
             timeout=timeout,
         )
     except Exception:
@@ -37,7 +42,7 @@ def sync_pull_blocking(timeout: int = 8) -> None:
 
 def server_up() -> bool:
     try:
-        with urllib.request.urlopen(f"{URL}/health", timeout=1) as response:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(f"{URL}/health", timeout=1) as response:
             health = json.load(response)
     except OSError:
         return False
@@ -146,25 +151,88 @@ def setup_app_menu() -> None:
         threading.Timer(delay, helper.scheduleSetup).start()
 
 
-def main() -> None:
-    try:
+def installed_bundle_path():
+    """Source runs and dist/preview bundles never install a system service."""
+    if (not getattr(sys, "frozen", False) or server.RELEASE_CHANNEL != "stable"
+            or os.environ.get("TODO_PREVIEW") == "1" or PORT != 8766):
+        return None
+    import runtime_upgrade
+    for parent in Path(sys.executable).resolve().parents:
+        if parent.suffix == ".app" and runtime_upgrade.installed_app(parent):
+            return parent
+    return None
+
+
+def prepare_desktop_runtime(progress):
+    app = installed_bundle_path()
+    if app is None:
+        progress("正在启动每日待办…")
         start_server_thread()
-    except RuntimeError as exc:
-        subprocess.run(["/usr/bin/osascript", "-e", 'on run argv\n display alert "每日待办暂时无法打开" message (item 1 of argv) as critical\nend run', str(exc)])
+        return None
+    import runtime_upgrade
+    result = runtime_upgrade.prepare_runtime(
+        app_path=app, default_data_dir=Path(server.DATA_DIR), version=server.VERSION,
+        channel=server.RELEASE_CHANNEL, port=PORT, progress=progress)
+    # The daemon's existing configuration wins over the GUI's fallback path.
+    # The GUI connects to that daemon and never starts a second embedded writer.
+    global SYNC_SH
+    server.DATA_DIR = str(result.data_dir)
+    server.DATA_FILE = str(result.data_dir / "todos.json")
+    SYNC_SH = str(result.data_dir / "sync.sh")
+    config = runtime_upgrade.read_configuration(Path.home() / "Library/LaunchAgents/com.ocean.daily-todo-server.plist")
+    return (config or {}).get("EnvironmentVariables", {})
+
+
+def _startup_html(message="正在启动每日待办…", failed=False):
+    title = "每日待办暂时无法打开" if failed else "每日待办"
+    note = "请处理上述问题后重新打开 App；已保留本地待办数据。" if failed else "正在准备本机服务，首次升级可能需要等待现有同步完成。"
+    return f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{{margin:0;background:#f7f7f5;color:#292d31;font:16px -apple-system,BlinkMacSystemFont,sans-serif;
+display:grid;place-items:center;min-height:100vh}}main{{max-width:640px;padding:40px}}h1{{font-size:25px}}
+p{{line-height:1.7}}.note{{color:#71757a;font-size:14px}}</style>
+<main><h1>{title}</h1><p id="startup-status" role="status" aria-live="polite">{escape(message)}</p>
+<p class="note">{note}</p></main></html>'''
+
+
+def main(argv=None) -> None:
+    arguments = sys.argv[1:] if argv is None else argv
+    if "--server-only" in arguments:
+        # launchd owns this long-lived process. No GUI, startup sync or runtime
+        # migration here, including when the daemon is started by rollback.
+        server.serve_forever()
         return
-    # 网络同步在后台进行，首屏与输入不等待远端；完成后页面轮询读回。
-    threading.Thread(target=sync_pull_blocking, kwargs={"timeout": 120}, daemon=True).start()
     import webview
     window = webview.create_window(
         "每日待办",
-        URL,
+        html=_startup_html(),
         width=1040,
         height=840,
         resizable=True,
         min_size=(920, 540),
     )
     _window_ref[0] = window
-    webview.start(setup_app_menu)
+
+    def start_in_background():
+        # pywebview runs this callback on its worker thread, after the native
+        # window exists. Waiting for launchd/sync never blocks the AppKit loop.
+        setup_app_menu()
+
+        def progress(message):
+            window.evaluate_js("document.getElementById('startup-status').textContent = " + json.dumps(message))
+
+        try:
+            environment = prepare_desktop_runtime(progress)
+            window.load_url(URL)
+            # Only ordinary startup sync may contact the remote. The migration
+            # has completed and the real UI is already available before it runs.
+            threading.Thread(target=sync_pull_blocking,
+                             kwargs={"timeout": 120, "environment": environment}, daemon=True).start()
+        except Exception as exc:
+            _menu_log(f"startup failed: {exc}")
+            window.load_html(_startup_html(str(exc), failed=True))
+
+    webview.start(start_in_background)
 
 
 if __name__ == "__main__":

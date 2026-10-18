@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import hashlib
 import math
 import re
@@ -168,7 +169,7 @@ def get_version() -> str:
 
 
 VERSION = get_version()
-RELEASE_CHANNEL = "project-preview"
+RELEASE_CHANNEL = "stable"
 GITHUB_REPO = "zhenchuanwuzc-max/daily-todo-public"
 GH_TOKEN_FILE = os.path.expanduser("~/daily-todo/.gh-token")
 
@@ -308,112 +309,115 @@ def download_asset(asset_url: str, dest_path: str, digest: str = "") -> None:
     _set_progress(status="downloaded")
 
 
-def install_update() -> dict:
-    """异步触发：开线程跑下载 + updater，主请求立即返回"""
-    if RELEASE_CHANNEL != "stable" or os.environ.get("TODO_DISABLE_UPDATE") == "1":
-        raise ValueError("项目跟进版本不使用公开版本更新，请通过本地开发入口升级")
-    rel = fetch_latest_release()
-    asset = next((a for a in rel.get("assets", []) if a.get("name", "").endswith(".zip")), None)
-    if not asset:
-        raise RuntimeError("release 里没找到 .zip 附件")
+def select_release_asset(release, machine=None):
+    import platform
+    machine = machine or platform.machine()
+    assets = [a for a in release.get("assets", []) if a.get("name", "").endswith(".zip")]
+    for suffix in ("-universal.zip", "-" + machine + ".zip"):
+        for asset in assets:
+            if asset["name"].endswith(suffix):
+                return asset
+    raise ValueError("没有适合当前 Mac 的安装包")
 
-    def _worker():
+
+def install_update() -> dict:
+    if RELEASE_CHANNEL != "stable" or os.environ.get("TODO_DISABLE_UPDATE") == "1" or os.environ.get("TODO_PREVIEW") == "1":
+        raise ValueError("当前隔离预览未启用自动更新")
+    with _progress_lock:
+        if _progress["status"] in ("checking", "downloading", "downloaded", "installing", "restarting"):
+            return {"ok": True, "started": True, "already_running": True}
+        _progress.update(status="checking", error=None, downloaded=0, total=0)
+    try:
+        rel = fetch_latest_release()
+        version = (rel.get("tag_name") or "").removeprefix("v")
+        if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+            raise ValueError("最新版本号格式异常")
+        if tuple(map(int, version.split("."))) <= tuple(map(int, VERSION.split("."))):
+            _set_progress(status="idle")
+            return {"ok": True, "started": False, "version": VERSION}
+        asset = select_release_asset(rel)
+        if not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", asset.get("digest") or ""):
+            raise ValueError("安装包缺少 SHA-256 校验值")
+    except Exception as exc:
+        _set_progress(status="error", error=str(exc))
+        raise
+    def worker():
         try:
             _do_install_update(rel, asset)
-        except Exception as e:
-            _set_progress(status="error", error=str(e))
-
-    t = threading.Thread(target=_worker, daemon=True)
-    t.start()
-
-    return {"ok": True, "started": True, "version": (rel.get("tag_name") or "").lstrip("v")}
+        except Exception as exc:
+            _set_progress(status="error", error=str(exc))
+    threading.Thread(target=worker, daemon=True).start()
+    return {"ok": True, "started": True, "version": version}
 
 
 def _do_install_update(rel: dict, asset: dict) -> None:
-    """实际下载 + 写 updater + spawn + 自杀"""
-    import shutil
-    update_dir = os.path.expanduser("~/daily-todo/.update")
-    if os.path.exists(update_dir):
-        shutil.rmtree(update_dir)
-    os.makedirs(update_dir, exist_ok=True)
-
-    zip_path = os.path.join(update_dir, asset["name"])
-    download_asset(asset["url"], zip_path, asset.get("digest", ""))
-
+    from pathlib import Path
+    import app_update
+    version = rel["tag_name"].removeprefix("v")
+    root = Path(APP_SUPPORT_DIR) / "update-backups" / (datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8])
+    root.mkdir(parents=True)
+    zip_path = root / "download.zip"
+    download_asset(asset.get("browser_download_url") or asset["url"], str(zip_path), asset["digest"])
+    # Reject traversal before macOS ditto preserves the bundle's legitimate links.
+    with zipfile.ZipFile(zip_path) as archive:
+        for name in archive.namelist():
+            if name.startswith("/") or ".." in Path(name).parts:
+                raise ValueError("安装包包含非法路径")
+    extracted = root / "extracted"
+    subprocess.run(["ditto", "-x", "-k", str(zip_path), str(extracted)], check=True)
+    apps = list(extracted.glob("*.app"))
+    if len(apps) != 1:
+        raise ValueError("安装包必须包含一个应用")
+    staged = apps[0]
+    app_update.validate_bundle(staged, version)
+    app_update.NativeSystem().verify_signature(staged)
+    target = Path.home() / "Applications/每日待办.app"
+    backup = root / "每日待办.app"
+    shutil.copytree(target, backup, symlinks=True)
+    resources = backup / "Contents/Resources"
+    python_zip, = (resources / "lib").glob("python*.zip")
+    python_lib, = (p for p in (resources / "lib").glob("python*.*") if p.is_dir())
+    runner = backup / "Contents/MacOS/python"
+    script = resources / "app_update.py"
+    if not runner.exists() or not script.exists():
+        raise ValueError("当前安装包缺少升级组件，请重新安装正式版")
+    plan = {"app": str(target), "staged_app": str(staged), "backup_app": str(backup),
+            "data_dir": DATA_DIR, "home": str(Path.home()), "version": version,
+            "port": PORT, "server_pid": os.getpid(), "server_source": os.path.abspath(__file__)}
+    plan_path = root / "plan.json"
+    plan_path.write_text(json.dumps(plan, ensure_ascii=False))
+    label = "com.ocean.daily-todo-update-" + uuid.uuid4().hex
+    env = dict(os.environ)
+    for key in ("PYTHONHOME", "PYTHONPATH", "PYTHONEXECUTABLE", "RESOURCEPATH", "ARGVZERO"):
+        env.pop(key, None)
+    python_path = os.pathsep.join((str(resources), str(python_zip), str(python_lib / "lib-dynload")))
+    command = ["/usr/bin/env", "PYTHONHOME=" + str(resources), "PYTHONPATH=" + python_path,
+               "PYTHONDONTWRITEBYTECODE=1", str(runner), "-B"]
+    # A launchctl submit exit code only accepts a job, not proof it can run.
+    subprocess.run(command + ["-c", "import app_update, runtime_upgrade, json, plistlib, fcntl, urllib.request"],
+                   check=True, capture_output=True, env=env, timeout=20)
     _set_progress(status="installing")
-
-    target_app = os.path.expanduser("~/Applications/每日待办.app")
-    log_path = "/tmp/daily-todo-updater.log"
-    updater_sh = os.path.join(update_dir, "updater.sh")
-    script = f"""#!/bin/bash
-export LANG=en_US.UTF-8
-export LC_ALL=en_US.UTF-8
-exec > "{log_path}" 2>&1
-set -e
-echo "[updater] start at $(date)"
-
-# 等当前 App 进程退出（最多 30 秒）
-for i in $(seq 1 60); do
-    if ! pgrep -f "Applications/每日待办.app/Contents/MacOS" > /dev/null; then
-        break
-    fi
-    sleep 0.5
-done
-# 兜底强杀
-pkill -9 -f "Applications/每日待办.app/Contents/MacOS" 2>/dev/null || true
-sleep 1
-
-cd "{update_dir}"
-mkdir -p extracted
-ditto -x -k "{zip_path}" extracted/
-NEW_APP=$(find extracted -maxdepth 2 -name "*.app" -type d | head -1)
-if [ -z "$NEW_APP" ]; then
-    echo "[updater] new .app not found in zip"
-    exit 1
-fi
-echo "[updater] new app: $NEW_APP"
-
-# 去 quarantine（zip 下载的会被打 quarantine 标，导致首次 Gatekeeper 拦截）
-xattr -dr com.apple.quarantine "$NEW_APP" 2>/dev/null || true
-
-# 替换
-rm -rf "{target_app}"
-mv "$NEW_APP" "{target_app}"
-echo "[updater] replaced"
-
-# 重新注册到 LaunchServices
-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "{target_app}"
-sleep 1
-
-# 重启
-open -a "{target_app}"
-echo "[updater] reopened"
-
-# 清理
-cd /tmp
-rm -rf "{update_dir}/extracted"
-"""
-    with open(updater_sh, "w", encoding="utf-8") as f:
-        f.write(script)
-    os.chmod(updater_sh, 0o755)
-
-    # detach 跑 updater（强制注入 UTF-8 locale，避免中文路径挂）
-    import subprocess
-    env = os.environ.copy()
-    env["LANG"] = "en_US.UTF-8"
-    env["LC_ALL"] = "en_US.UTF-8"
-    subprocess.Popen(
-        ["/bin/bash", updater_sh],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-        env=env,
-    )
-
+    subprocess.run(["launchctl", "submit", "-l", label,
+                    "-o", str(root / "updater.log"), "-e", str(root / "updater.log"),
+                    "--", *command, str(script), str(plan_path)], check=True, env=env)
+    for _ in range(100):
+        if (root / "error.txt").exists():
+            raise RuntimeError((root / "error.txt").read_text())
+        if (root / "started.json").exists():
+            break
+        time.sleep(.1)
+    else:
+        subprocess.run(["launchctl", "remove", label], capture_output=True)
+        raise RuntimeError("升级组件未启动，当前应用保持原样；请查看升级日志")
     _set_progress(status="restarting")
-
-    # 1.5 秒后 server 自杀（让 webview 退出 + .app 进程结束）
-    threading.Timer(1.5, lambda: os._exit(0)).start()
+    # This worker normally exits with its old server. If startup fails before
+    # stopping that server, surface the updater's error instead of spinning.
+    for _ in range(360):
+        if (root / "error.txt").exists():
+            raise RuntimeError((root / "error.txt").read_text())
+        if (root / "receipt.json").exists():
+            return
+        time.sleep(.5)
 
 
 def read_data():
@@ -1550,9 +1554,9 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/update-progress":
                 self._json(get_progress())
             elif path == "/check-update":
-                if RELEASE_CHANNEL != "stable" or os.environ.get("TODO_DISABLE_UPDATE") == "1":
+                if RELEASE_CHANNEL != "stable" or os.environ.get("TODO_DISABLE_UPDATE") == "1" or os.environ.get("TODO_PREVIEW") == "1":
                     self._json({"current": VERSION, "channel": RELEASE_CHANNEL,
-                                "error": "项目跟进版本不使用公开版本更新，请通过本地开发入口升级"})
+                                "error": "当前隔离预览未启用自动更新"})
                     return
                 try:
                     rel = fetch_latest_release()

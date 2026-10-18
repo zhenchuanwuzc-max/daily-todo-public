@@ -18,7 +18,10 @@ VERSION = (
 )
 
 APP = ["desktop_app.py"]
-DATA_FILES = ["index.html", "server.py", "VERSION"]
+DATA_FILES = [
+    "index.html", "server.py", "runtime_upgrade.py", "app_update.py", "VERSION",
+    ("sync", ["sync/json-merge.py", "sync/sync-helper.py", "sync/sync.sh"]),
+]
 
 OPTIONS = {
     "argv_emulation": False,
@@ -36,6 +39,8 @@ OPTIONS = {
     "packages": ["webview", "apscheduler"],
     "includes": [
         "server",
+        "runtime_upgrade",
+        "app_update",
         "json",
         "http.server",
         "urllib.request",

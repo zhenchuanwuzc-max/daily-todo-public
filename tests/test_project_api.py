@@ -288,7 +288,7 @@ for n in range(8):
         self.assertEqual(health["data_file"], self.file)
         self.assertTrue(health["preview"])
         self.assertFalse(health["sync_enabled"])
-        self.assertEqual(health["channel"], "project-preview")
+        self.assertEqual(health["channel"], "stable")
         self.assertFalse(self.request("POST", "/sync-now")["ok"])
         self.request("POST", "/install-update", expected=400)
         self.assertIn("error", self.request("GET", "/check-update"))

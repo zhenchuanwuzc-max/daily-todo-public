@@ -162,7 +162,7 @@ class DesktopServiceIdentityTests(unittest.TestCase):
         return io.BytesIO(json.dumps(value).encode())
 
     def test_matching_service_is_reused_without_starting_native_or_server_thread(self):
-        with patch.object(desktop_app.urllib.request, "urlopen", side_effect=lambda *a, **k: self.response(self.health)) as call, \
+        with patch.object(desktop_app.urllib.request.OpenerDirector, "open", side_effect=lambda *a, **k: self.response(self.health)) as call, \
                 patch.object(desktop_app.threading, "Thread") as thread:
             self.assertTrue(desktop_app.server_up())
             desktop_app.start_server_thread()
@@ -170,10 +170,10 @@ class DesktopServiceIdentityTests(unittest.TestCase):
             self.assertTrue(all(args[0][0].endswith("/health") for args in call.call_args_list))
 
     def test_each_identity_mismatch_fails_before_starting_thread(self):
-        for field, value in (("app", "other"), ("version", "0.0.0"), ("channel", "stable"),
+        for field, value in (("app", "other"), ("version", "0.0.0"), ("channel", "unknown"),
                              ("data_file", "/tmp/wrong-data/todos.json"), ("preview", True)):
             with self.subTest(field=field), \
-                    patch.object(desktop_app.urllib.request, "urlopen", side_effect=lambda *a, **k:
+                    patch.object(desktop_app.urllib.request.OpenerDirector, "open", side_effect=lambda *a, **k:
                                  self.response({**self.health, field: value})), \
                     patch.object(desktop_app.threading, "Thread") as thread:
                 with self.assertRaisesRegex(RuntimeError, "不一致"):
@@ -181,16 +181,16 @@ class DesktopServiceIdentityTests(unittest.TestCase):
                 thread.assert_not_called()
 
     def test_unreachable_and_non_json_services_are_distinguished(self):
-        with patch.object(desktop_app.urllib.request, "urlopen", side_effect=OSError("connection refused")):
+        with patch.object(desktop_app.urllib.request.OpenerDirector, "open", side_effect=OSError("connection refused")):
             self.assertFalse(desktop_app.server_up())
-        with patch.object(desktop_app.urllib.request, "urlopen", return_value=io.BytesIO(b"not-json")):
+        with patch.object(desktop_app.urllib.request.OpenerDirector, "open", return_value=io.BytesIO(b"not-json")):
             with self.assertRaisesRegex(RuntimeError, "其他服务"):
                 desktop_app.server_up()
 
     def test_malformed_health_shape_is_reported_as_service_mismatch(self):
         for health in ([], None, 1, {**self.health, "data_file": None}):
             with self.subTest(health=health), patch.object(
-                    desktop_app.urllib.request, "urlopen", side_effect=lambda *a, **k: self.response(health)):
+                    desktop_app.urllib.request.OpenerDirector, "open", side_effect=lambda *a, **k: self.response(health)):
                 with self.assertRaises(RuntimeError):
                     desktop_app.server_up()
 

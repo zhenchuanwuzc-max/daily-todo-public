@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     strategy:
@@ -40,60 +44,187 @@ jobs:
       - name: Test and build from source
         run: |
           set -euo pipefail
-          python -m py_compile server.py
-          python -m unittest discover -s tests -v
+          sandbox="$(mktemp -d)"
+          mkdir -p "$sandbox/home" "$sandbox/data"
+          HOME="$sandbox/home" TODO_DATA_DIR="$sandbox/data" \
+            TODO_DISABLE_SYNC=1 TODO_DISABLE_UPDATE=1 \
+            python -m unittest discover -s tests -v
           test "$(cat VERSION)" = "${GITHUB_REF_NAME#v}"
           python setup.py py2app
           app='dist/每日待办.app'
-          test -d "$app"
-          test "$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")" = "${GITHUB_REF_NAME#v}"
-          cmp server.py "$app/Contents/Resources/server.py"
-          cmp index.html "$app/Contents/Resources/index.html"
-          python - <<'PY'
-          from pathlib import Path
-          import platform, subprocess, zipfile
-          root = Path('dist/每日待办.app/Contents')
-          expected = '${{ matrix.arch }}'
-          assert platform.machine() == expected
-          archive, = (root / 'Resources/lib').glob('python*.zip')
-          with zipfile.ZipFile(archive) as z:
-              embedded = z.read('server.pyc')
-              assert b'reorder_projects' in embedded and b'launch_date' in embedded
-          binaries = 0
-          for path in root.rglob('*'):
-              if not path.is_file() or path.is_symlink():
-                  continue
-              if 'Mach-O' in subprocess.check_output(['file', '-b', str(path)], text=True):
-                  arches = subprocess.check_output(['lipo', '-archs', str(path)], text=True).split()
-                  assert expected in arches, (str(path), arches)
-                  binaries += 1
-          assert binaries > 1, 'Native runtime was not packaged'
-          PY
-          codesign --verify --deep --strict "$app"
-          ditto -c -k --sequesterRsrc --keepParent "$app" "daily-todo-${GITHUB_REF_NAME#v}-macos-${{ matrix.arch }}.zip"
-          shasum -a 256 daily-todo-*-macos-${{ matrix.arch }}.zip > SHA256SUMS-${{ matrix.arch }}.txt
+          test "$(uname -m)" = '${{ matrix.arch }}'
+          python scripts/merge-universal.py verify "$app" --source . \
+            --version "${GITHUB_REF_NAME#v}" --arch '${{ matrix.arch }}'
+          ditto -c -k --sequesterRsrc --keepParent "$app" 'bundle-${{ matrix.arch }}.zip'
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}
-          path: |
-            daily-todo-*-macos-${{ matrix.arch }}.zip
-            SHA256SUMS-${{ matrix.arch }}.txt
+          name: bundle-${{ matrix.arch }}
+          path: bundle-${{ matrix.arch }}.zip
+          if-no-files-found: error
+
+  universal:
+    needs: build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bundle-*
+          path: inputs
+      - name: Merge and verify every native file, then sign the universal bundle
+        run: |
+          set -euo pipefail
+          ditto -x -k inputs/bundle-arm64/bundle-arm64.zip inputs/arm64
+          ditto -x -k inputs/bundle-x86_64/bundle-x86_64.zip inputs/x86_64
+          python scripts/merge-universal.py merge \
+            --arm64 'inputs/arm64/每日待办.app' \
+            --x86_64 'inputs/x86_64/每日待办.app' \
+            --output 'universal/每日待办.app'
+          python scripts/merge-universal.py verify 'universal/每日待办.app' \
+            --source . --version "${GITHUB_REF_NAME#v}" --arch arm64 --arch x86_64
+          mkdir -p release-assets
+          ditto -c -k --sequesterRsrc --keepParent 'universal/每日待办.app' \
+            "release-assets/daily-todo-${GITHUB_REF_NAME#v}-macos-universal.zip"
+          cd release-assets
+          shasum -a 256 *.zip > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: release-assets/*
+          if-no-files-found: error
+
+  verify-universal:
+    needs: universal
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-universal
+          path: release-assets
+      - name: Verify the exact release ZIP on both architectures
+        run: |
+          set -euo pipefail
+          (cd release-assets && shasum -a 256 -c SHA256SUMS.txt)
+          ditto -x -k release-assets/*.zip extracted
+          python scripts/merge-universal.py verify 'extracted/每日待办.app' \
+            --source . --version "${GITHUB_REF_NAME#v}" --arch arm64 --arch x86_64
+      - name: Smoke test the packaged server with isolated data
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          python - <<'PY'
+          import json, os, platform, socket, subprocess, tempfile, time, urllib.request
+          from pathlib import Path
+
+          assert platform.machine() == os.environ['EXPECTED_ARCH']
+          app = Path('extracted/每日待办.app').resolve()
+          binary = app / 'Contents/MacOS/每日待办'
+          version = os.environ['GITHUB_REF_NAME'].removeprefix('v')
+          with tempfile.TemporaryDirectory(prefix='daily-todo-release-smoke-') as temporary:
+              root = Path(temporary)
+              home, data, support = root / 'home', root / 'data', root / 'support'
+              for directory in (home, data, support):
+                  directory.mkdir()
+              (data / 'todos.json').write_text(json.dumps({'tasks': [], 'projects': []}))
+              with socket.socket() as listener:
+                  listener.bind(('127.0.0.1', 0))
+                  port = listener.getsockname()[1]
+              env = dict(os.environ)
+              for key in ('PYTHONHOME', 'PYTHONPATH', 'PYTHONEXECUTABLE'):
+                  env.pop(key, None)
+              env.update(HOME=str(home), TODO_DATA_DIR=str(data), TODO_PORT=str(port),
+                         TODO_APP_SUPPORT_DIR=str(support), TODO_DISABLE_SYNC='1',
+                         TODO_DISABLE_UPDATE='1', PYTHONUNBUFFERED='1')
+              with (root / 'server.log').open('w+b') as log:
+                  process = subprocess.Popen(
+                      ['/usr/bin/arch', '-' + os.environ['EXPECTED_ARCH'], str(binary), '--server-only'],
+                      env=env, cwd=root, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+                  try:
+                      deadline = time.monotonic() + 30
+                      health = None
+                      while time.monotonic() < deadline and process.poll() is None:
+                          try:
+                              with urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=1) as response:
+                                  health = json.load(response)
+                              break
+                          except OSError:
+                              time.sleep(0.2)
+                      assert health is not None, 'Packaged server did not start'
+                      assert health['app'] == 'daily-todo', health
+                      assert health['version'] == version and health['channel'] == 'stable', health
+                      assert Path(health['data_file']).resolve() == (data / 'todos.json').resolve(), health
+                      assert health['sync_enabled'] is False, health
+                      with urllib.request.urlopen(f'http://127.0.0.1:{port}/todos', timeout=3) as response:
+                          assert json.load(response)['tasks'] == []
+                      print(f'Packaged server passed: {version}, {os.environ["EXPECTED_ARCH"]}, isolated data')
+                  finally:
+                      process.terminate()
+                      try:
+                          process.wait(timeout=5)
+                      except subprocess.TimeoutExpired:
+                          process.kill()
+                          process.wait(timeout=5)
+                      log.seek(0)
+                      print(log.read().decode(errors='replace'))
+          PY
 
   release:
-    needs: build
+    needs: verify-universal
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
+          name: macos-universal
           path: release-assets
-          merge-multiple: true
-      - name: Publish GitHub Release
+      - name: Require exactly one universal ZIP for legacy updaters
+        run: |
+          set -euo pipefail
+          test "$(find release-assets -name '*.zip' | wc -l | tr -d ' ')" = 1
+          test -f "release-assets/daily-todo-${GITHUB_REF_NAME#v}-macos-universal.zip"
+          cp "docs/RELEASE-${GITHUB_REF_NAME#v}.md" release-notes.md
+          (cd release-assets && sha256sum -c SHA256SUMS.txt)
+      # Publish only after the release operator validates this same ZIP locally:
+      # gh release edit "$tag" --draft=false --prerelease=false --latest
+      - name: Stage the verified stable release for final upgrade acceptance
         uses: softprops/action-gh-release@v2
         with:
           name: 每日待办 ${{ github.ref_name }} · 项目跟进版
-          prerelease: true
+          draft: true
+          prerelease: false
           make_latest: false
           fail_on_unmatched_files: true
-          files: release-assets/*
-          body_path: docs/RELEASE-1.1.4.md
+          files: |
+            release-assets/daily-todo-*-macos-universal.zip
+            release-assets/SHA256SUMS.txt
+          body_path: release-notes.md
+      - name: Verify the staged release has only the two intended assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --json assets,isDraft,isPrerelease > release-metadata.json
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          release = json.loads(Path('release-metadata.json').read_text())
+          version = os.environ['GITHUB_REF_NAME'].removeprefix('v')
+          assert release['isDraft'] is True and release['isPrerelease'] is False, release
+          assert sorted(asset['name'] for asset in release['assets']) == sorted([
+              f'daily-todo-{version}-macos-universal.zip', 'SHA256SUMS.txt']), release['assets']
+          PY
