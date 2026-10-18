@@ -71,6 +71,24 @@ def verify_checksum(directory, filename):
     return digest.hexdigest()
 
 
+def validate_archive(archive_path):
+    with zipfile.ZipFile(archive_path) as archive:
+        for item in archive.infolist():
+            name = item.filename
+            # macOS ditto stores UTF-8 bytes without ZIP's language flag.
+            # Python then decodes them as CP437; recover exactly those bytes
+            # before applying the same root/traversal restrictions as ditto.
+            if not item.flag_bits & 0x800:
+                try:
+                    name = name.encode('cp437').decode('utf-8')
+                except (UnicodeEncodeError, UnicodeDecodeError) as exc:
+                    raise ValueError('Unsafe path encoding in release ZIP') from exc
+            path = PurePosixPath(name)
+            if (not path.parts or path.is_absolute() or '..' in path.parts
+                    or path.parts[0] not in ('每日待办.app', '__MACOSX')):
+                raise ValueError('Unsafe path in release ZIP')
+
+
 def configured_data(home):
     home = Path(home)
     agents = home / "Library/LaunchAgents"
@@ -145,11 +163,7 @@ def install_release(version):
     subprocess.run(["gh", "release", "download", "v" + version, "--repo", REPO,
                     "--pattern", filename, "--pattern", "SHA256SUMS.txt", "--dir", str(download)], check=True)
     digest = verify_checksum(download, filename)
-    with zipfile.ZipFile(download / filename) as archive:
-        for name in archive.namelist():
-            path = PurePosixPath(name)
-            if path.is_absolute() or ".." in path.parts or path.parts[0] not in ("每日待办.app", "__MACOSX"):
-                raise ValueError("Unsafe path in release ZIP")
+    validate_archive(download / filename)
     extracted = root / "extracted"
     subprocess.run(["ditto", "-x", "-k", str(download / filename), str(extracted)], check=True)
     staged = extracted / "每日待办.app"

@@ -6,10 +6,10 @@ change the remote URL or create a remote repository.
 
 ## Install on each device
 
-For the 1.2.0 stable release, prefer the application migration instead of copying
+For the 1.2.1 stable release, prefer the application migration instead of copying
 helpers manually. The universal package contains all three sync helpers. Existing
 1.0.22 users can use Check for Updates; 1.1.4 preview users must run
-`scripts/release.sh --install 1.2.0` once from the 1.2.0 source checkout. The latter
+`scripts/release.sh --install 1.2.1` once from the 1.2.1 source checkout. The latter
 verifies SHA-256 and the application signature, saves the previous app, and uses
 the current transactional updater even when the old bundle has no updater module.
 

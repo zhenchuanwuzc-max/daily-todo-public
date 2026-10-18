@@ -46,6 +46,24 @@ class ReleaseInstallTests(unittest.TestCase):
     def test_accepts_the_exact_draft_release(self):
         self.assertEqual(self.module.validate_release(self.release, "1.2.0"), self.filename)
 
+    def test_accepts_actual_macos_ditto_zip_with_chinese_bundle_paths(self):
+        source = self.home / 'bundle/每日待办.app'
+        source.mkdir(parents=True)
+        (source / '文件.txt').write_text('example')
+        archive = self.home / 'ditto.zip'
+        subprocess.run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(source), str(archive)], check=True)
+        self.module.validate_archive(archive)
+
+    def test_archive_rejects_traversal_and_other_application_roots(self):
+        import zipfile
+        archive = self.home / 'unsafe.zip'
+        for name in ('../escape', '/absolute', 'different.app/file'):
+            with self.subTest(name=name):
+                with zipfile.ZipFile(archive, 'w') as handle:
+                    handle.writestr(name, 'example')
+                with self.assertRaisesRegex(ValueError, 'Unsafe path'):
+                    self.module.validate_archive(archive)
+
     def test_checksum_checks_the_actual_download(self):
         (self.home / self.filename).write_bytes(b"downloaded bytes")
         digest = hashlib.sha256(b"downloaded bytes").hexdigest()

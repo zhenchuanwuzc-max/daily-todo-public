@@ -1,6 +1,6 @@
 # 事情跟进与项目跟进
 
-项目功能从 1.2.0 起进入正式版，Intel 与 Apple Silicon 使用同一个通用安装包。原正式版 1.0.22 可通过「检查更新」升级；1.1.4 预览版需手动安装一次，完整步骤和备份边界见 [1.2.0 发布说明](RELEASE-1.2.0.md)。
+项目功能从 1.2.1 起进入正式版，Intel 与 Apple Silicon 使用同一个通用安装包。原正式版 1.0.22 可通过「检查更新」升级；1.1.4 预览版需手动安装一次，完整步骤和备份边界见 [1.2.1 发布说明](RELEASE-1.2.1.md)。
 
 同一应用两个 Tab，共用同一条事项。事情跟进保持一行一件事，点击名称、负责人、截止日期即可修改；归属项目和里程碑可选。
 
@@ -87,7 +87,7 @@ TODO_TEST_BROWSER=webkit python3 tests/browser_recurring.py
 python3 scripts/install-local.py
 ```
 
-上述 `install-local.py` 保留为开发包安装入口。正式包使用 `scripts/release.sh --install 1.2.0`：下载并校验唯一通用包，备份旧 App 后执行可回滚安装，首次启动将后台服务切换到已安装 App。正式运行不再依赖开发源码目录。安装命令不会公开 Release；只有维护者通过 `--publish 1.2.0` 的本机验收门禁后才公开。
+上述 `install-local.py` 保留为开发包安装入口。正式包使用 `scripts/release.sh --install 1.2.1`：下载并校验唯一通用包，备份旧 App 后执行可回滚安装，首次启动将后台服务切换到已安装 App。正式运行不再依赖开发源码目录。安装命令不会公开 Release；只有维护者通过 `--publish 1.2.1` 的本机验收门禁后才公开。
 
 开发安装备份位于 `~/Library/Application Support/daily-todo/deploy-backups/<时间>/`；正式包安装使用 `update-backups/`，首次服务迁移使用 `runtime-backups/`。
 安装失败会恢复旧应用、同步脚本和启动配置；不会自动覆盖可能刚被用户修改的真实数据。手动回退时先停止两个版本的写入，保留当前数据副本，再恢复备份应用和配置；旧版不能与新版并行写项目数据。

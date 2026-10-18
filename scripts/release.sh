@@ -71,7 +71,7 @@ main() {
             [ "$#" -le 1 ] || fail "--no-restart 不接受其他参数"
             run_tests ;;
         --stage|--install|--publish)
-            [ "$#" = 2 ] || fail "$1 需要明确版本号，例如 $1 1.2.0"
+            [ "$#" = 2 ] || fail "$1 需要明确版本号，例如 $1 1.2.1"
             require_version "$2"
             case "$1" in
                 --stage) stage_release ;;
