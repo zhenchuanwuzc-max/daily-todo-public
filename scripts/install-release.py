@@ -41,7 +41,7 @@ class InstallerSystem(app_update.NativeSystem):
         return self.runtime.health(port) or {}
 
     def command(self, pid):
-        return subprocess.check_output(["ps", "-p", str(pid), "-o", "command="], text=True).strip()
+        return subprocess.check_output(["ps", "-p", str(pid), "-o", "command="], text=True, encoding="utf-8", errors="replace").strip()
 
 
 def validate_release(release, version):

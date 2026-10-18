@@ -23,6 +23,16 @@ SYNC = "com.ocean.daily-todo-sync"
 HELPERS = ("sync.sh", "sync-helper.py", "json-merge.py")
 
 
+class NativeProcessEncodingTests(unittest.TestCase):
+    def test_non_utf8_process_output_does_not_abort_upgrade(self):
+        import sys
+        import runtime_upgrade
+        result = runtime_upgrade.NativeSystem._run(sys.executable, '-c',
+            "import os; os.write(1, b'123 python sync\\xff\\n')")
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('123 python sync', result.stdout)
+
+
 class FakeMac:
     def __init__(self, data):
         self.data = data

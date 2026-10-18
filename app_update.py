@@ -57,7 +57,7 @@ class NativeSystem:
         # Embedded-server app or a source server explicitly initiating this update.
         parent = int(plan.get('server_pid', -1))
         if parent > 0:
-            command = subprocess.run(['ps', '-p', str(parent), '-o', 'command='], capture_output=True, text=True).stdout.strip()
+            command = subprocess.run(['ps', '-p', str(parent), '-o', 'command='], capture_output=True, text=True, encoding='utf-8', errors='replace').stdout.strip()
             executable = str(app / 'Contents/MacOS/每日待办')
             source = plan.get('server_source', '')
             if command == executable or command == executable + ' --server-only' or (source and command.endswith(' ' + source)):
@@ -74,7 +74,7 @@ class NativeSystem:
                 raise RuntimeError('Unknown sync job; update stopped before changing files')
         if job:
             native.stop(LABELS[0])
-        output = subprocess.check_output(['ps', '-axo', 'pid=,command='], text=True)
+        output = subprocess.check_output(['ps', '-axo', 'pid=,command='], text=True, encoding='utf-8', errors='replace')
         for line in output.splitlines():
             pid, _, command = line.strip().partition(' ')
             if command.strip() == str(app / 'Contents/MacOS/每日待办'):

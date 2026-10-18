@@ -32,7 +32,7 @@ class NativeSystem:
 
     @staticmethod
     def _run(*args):
-        return subprocess.run(args, capture_output=True, text=True, timeout=15)
+        return subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15)
 
     def job(self, label):
         result = self._run("/bin/launchctl", "print", f"{self.domain}/{label}")
