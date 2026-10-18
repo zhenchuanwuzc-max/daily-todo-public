@@ -658,8 +658,25 @@ def followup_id(kind, value):
     return f"{kind}-{uuid.uuid5(uuid.NAMESPACE_URL, 'daily-todo:' + kind + ':' + value).hex}"
 
 
+PERSON_METADATA_FIELDS = ("chinese_name", "english_name", "aliases", "dingtalk_user_id")
+
+
+def person_metadata(value, field):
+    """Validate optional directory details without changing the person's identity."""
+    if field == "aliases":
+        if not isinstance(value, list):
+            raise ValueError("aliases must be an array")
+        aliases = list(dict.fromkeys(
+            followup_text(alias, "alias", allow_empty=False, allow_spaces=True)
+            for alias in value))
+        if len(aliases) > 30:
+            raise ValueError("aliases must contain at most 30 names")
+        return aliases
+    return followup_text(value, field, allow_spaces=field != "dingtalk_user_id")
+
+
 def upsert_people(item):
-    """Apply only supplied rows, rejecting stale employee IDs before any write."""
+    """Apply supplied fields only, rejecting stale directory details before any write."""
     rows = item.get("people")
     if not isinstance(rows, list):
         raise ValueError("people must be an array")
@@ -674,34 +691,137 @@ def upsert_people(item):
         names.add(identity)
         employee_id = followup_text(row.get("employee_id"), "employee_id")
         base = followup_text(row.get("base_employee_id"), "base_employee_id")
-        normalized.append((name, identity, employee_id, base))
+        fields, bases = {"employee_id": employee_id}, {"employee_id": base}
+        for field in PERSON_METADATA_FIELDS:
+            if field not in row:
+                continue
+            base_field = "base_" + field
+            if base_field not in row:
+                raise ValueError(f"{base_field} required")
+            fields[field] = person_metadata(row[field], field)
+            bases[field] = person_metadata(row[base_field], field)
+        normalized.append((name, identity, fields, bases))
     changed = False
     with _write_lock:
         data = read_data()
         existing = {person["name"].strip().casefold(): person for person in data["people"]}
-        for name, identity, employee_id, base in normalized:
-            current = existing.get(identity, {}).get("employee_id", "")
-            if current != base and current != employee_id:
-                raise ConflictError(f"{name} 的工号已更新，请刷新后再修改")
-        for name, identity, employee_id, _base in normalized:
+        for name, identity, fields, bases in normalized:
+            person = existing.get(identity, {})
+            if person.get("deleted_at") or person.get("merged_into"):
+                raise ConflictError(f"{name} 已合并或移除，请刷新人员名单后再修改")
+            for field, target in fields.items():
+                current = person.get(field, [] if field == "aliases" else "")
+                if current != bases[field] and current != target:
+                    label = "工号" if field == "employee_id" else "人员资料"
+                    raise ConflictError(f"{name} 的{label}已更新，请刷新后再修改")
+        for name, identity, fields, _bases in normalized:
             person = existing.get(identity)
             if person is None:
                 stamp = timestamp()
                 person = {"id": followup_id("person", identity), "name": name,
-                          "employee_id": employee_id, "created": stamp}
+                          "chinese_name": "", "english_name": "", "aliases": [],
+                          "dingtalk_user_id": "", "created": stamp, **fields}
                 stamp_fields(person, list(person), stamp)
                 data["people"].append(person)
                 existing[identity] = person
                 changed = True
-            elif person.get("employee_id", "") != employee_id:
-                person["employee_id"] = employee_id
-                stamp_fields(person, ["employee_id"])
-                changed = True
+            else:
+                changes = [field for field, value in fields.items()
+                           if person.get(field, [] if field == "aliases" else "") != value]
+                if changes:
+                    person.update({field: fields[field] for field in changes})
+                    stamp_fields(person, changes)
+                    changed = True
         if changed:
             _atomic_write_todos(data)
         result = {"ok": True, "people": data["people"], "revision": data["revision"]}
     if changed:
         schedule_sync()
+    return result
+
+
+def merge_people(item):
+    """Combine reviewed identities without rewriting any historical owner strings."""
+    target_id = followup_text(item.get("target_id"), "target_id", allow_empty=False)
+    source_ids = item.get("source_ids")
+    if not isinstance(source_ids, list) or not source_ids:
+        raise ValueError("source_ids must be a non-empty array")
+    source_ids = [followup_text(identity, "source_id", allow_empty=False) for identity in source_ids]
+    if len(source_ids) != len(set(source_ids)) or target_id in source_ids:
+        raise ValueError("source_ids must be unique and exclude target_id")
+    base_people = item.get("base_people")
+    if not isinstance(base_people, list):
+        raise ValueError("base_people must contain complete person snapshots")
+    bases = {}
+    for person in base_people:
+        if not isinstance(person, dict):
+            raise ValueError("base_people must contain complete person snapshots")
+        identity = followup_text(person.get("id"), "base person id", allow_empty=False)
+        followup_text(person.get("name"), "base person name", allow_empty=False, allow_spaces=True)
+        if identity in bases:
+            raise ValueError("base_people must contain unique IDs")
+        bases[identity] = person
+    if set(bases) != {target_id, *source_ids}:
+        raise ValueError("base_people must match target_id and source_ids exactly")
+    fingerprint = hashlib.sha256(json.dumps(
+        {"operation": "merge-people-v1", "target_id": target_id, "source_ids": source_ids,
+         "base_people": [bases[identity] for identity in sorted(bases)]},
+        ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+    with _write_lock:
+        data = read_data()
+        by_id = {person["id"]: person for person in data["people"]}
+        if any(identity not in by_id for identity in bases):
+            raise ConflictError("人员名单已变化，请刷新后再合并")
+        target, sources = by_id[target_id], [by_id[identity] for identity in source_ids]
+        if target.get("deleted_at") or target.get("merged_into"):
+            raise ConflictError("目标人员已合并或移除，请刷新后再合并")
+        already_merged = all(source.get("deleted_at") and source.get("merged_into") == target_id
+                             and source.get("_merge_fingerprint") == fingerprint for source in sources)
+        if already_merged:
+            return {"ok": True, "people": data["people"], "revision": data["revision"],
+                    "target_id": target_id, "merged_ids": source_ids, "already_merged": True}
+        if any(source.get("deleted_at") or source.get("merged_into") for source in sources):
+            raise ConflictError("来源人员已合并或移除，请刷新后再合并")
+        if any(by_id[identity] != baseline for identity, baseline in bases.items()):
+            raise ConflictError("人员资料已更新，请刷新后再合并")
+        records = [target, *sources]
+        for field, label in (("employee_id", "工号"), ("dingtalk_user_id", "钉钉 ID")):
+            values = {followup_text(person.get(field, ""), field) for person in records} - {""}
+            if len(values) > 1:
+                raise ConflictError(f"{label}不一致，无法合并；请先核对人员资料")
+        changes = {}
+        for field in ("employee_id", "chinese_name", "english_name", "dingtalk_user_id"):
+            allow_spaces = field in ("chinese_name", "english_name")
+            if not followup_text(target.get(field, ""), field, allow_spaces=allow_spaces):
+                for source in sources:
+                    value = followup_text(source.get(field, ""), field, allow_spaces=allow_spaces)
+                    if value:
+                        changes[field] = value
+                        break
+        aliases, seen = [], {target["name"].strip().casefold()}
+        candidates = person_metadata(target.get("aliases", []), "aliases")
+        for source in sources:
+            candidates.extend([source["name"], source.get("chinese_name", ""), source.get("english_name", "")])
+            candidates.extend(person_metadata(source.get("aliases", []), "aliases"))
+        for alias in candidates:
+            alias = followup_text(alias, "alias", allow_spaces=True)
+            if alias and alias.casefold() not in seen:
+                aliases.append(alias)
+                seen.add(alias.casefold())
+        aliases = person_metadata(aliases, "aliases")
+        if aliases != target.get("aliases", []):
+            changes["aliases"] = aliases
+        stamp = timestamp()
+        if changes:
+            target.update(changes)
+            stamp_fields(target, changes, stamp)
+        for source in sources:
+            source.update(deleted_at=stamp, merged_into=target_id, _merge_fingerprint=fingerprint)
+            stamp_fields(source, ["deleted_at", "merged_into", "_merge_fingerprint"], stamp)
+        _atomic_write_todos(data)
+        result = {"ok": True, "people": data["people"], "revision": data["revision"],
+                  "target_id": target_id, "merged_ids": source_ids, "already_merged": False}
+    schedule_sync()
     return result
 
 
@@ -761,6 +881,12 @@ def valid_date(value, field, required=False):
         date.fromisoformat(value)
     except ValueError:
         raise ValueError(f"{field} must be a real YYYY-MM-DD date") from None
+    return value
+
+
+def project_business_line(value):
+    if value is not None and (not isinstance(value, str) or value not in ("crm", "logistics")):
+        raise ValueError("business_line must be crm, logistics or null")
     return value
 
 
@@ -1070,6 +1196,7 @@ def add_project(item):
                 if "dingtalk_group_id" in item else None)
     links = {field: project_link(item[field], field) for field in ("prd_url", "materials_url") if field in item}
     launch_date = valid_date(item.get("launch_date"), "launch_date")
+    business_line = project_business_line(item.get("business_line"))
     template_id = item.get("template_id")
     if template_id is not None and (not isinstance(template_id, str) or not template_id.strip()):
         raise ValueError("template_id must be a project ID or null")
@@ -1084,6 +1211,8 @@ def add_project(item):
     # it from the fingerprint also preserves retries created before this field.
     if launch_date is not None:
         request_fields["launch_date"] = launch_date
+    if business_line is not None:
+        request_fields["business_line"] = business_line
     fingerprint = hashlib.sha256(json.dumps(request_fields, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     with _write_lock:
         data = read_data()
@@ -1105,6 +1234,8 @@ def add_project(item):
             project["dingtalk_group_id"] = group_id
         if "launch_date" in item:
             project["launch_date"] = launch_date
+        if "business_line" in item:
+            project["business_line"] = business_line
         if template_id:
             source = entity_by_id(data, "projects", template_id)
             _instantiate_template(data, project, source, stamp)
@@ -1138,7 +1269,7 @@ def add_milestone(item):
 
 
 def patch_entity(collection, entity_id, patch):
-    allowed = {"name", "owner", "goal", "core", "archived", "dingtalk_group_id", "prd_url", "materials_url", "launch_date"} if collection == "projects" else {
+    allowed = {"name", "owner", "goal", "core", "archived", "dingtalk_group_id", "prd_url", "materials_url", "launch_date", "business_line"} if collection == "projects" else {
         "name", "owner", "due"}
     with _write_lock:
         data = read_data()
@@ -1154,6 +1285,8 @@ def patch_entity(collection, entity_id, patch):
             if not isinstance(changes["goal"], str):
                 raise ValueError("goal must be text")
             changes["goal"] = changes["goal"].strip()
+        if "business_line" in changes:
+            changes["business_line"] = project_business_line(changes["business_line"])
         if "dingtalk_group_id" in changes:
             changes["dingtalk_group_id"] = followup_text(changes["dingtalk_group_id"], "dingtalk_group_id")
         for field in ("prd_url", "materials_url"):
@@ -1192,6 +1325,11 @@ def reorder_projects(item):
             or any(not isinstance(identity, str) or not identity for identity in ids)
             or len(ids) != len(set(ids))):
         raise ValueError("ids must contain at least two unique project IDs")
+    scoped = "business_line" in item
+    if scoped:
+        scope = project_business_line(item["business_line"])
+        if scope is None:
+            raise ValueError("reorder business_line must be crm or logistics")
     with _write_lock:
         data = read_data()
         by_id = {project["id"]: project for project in data["projects"]}
@@ -1199,15 +1337,34 @@ def reorder_projects(item):
         if any(project is None or project.get("deleted_at") or project.get("archived")
                for project in selected):
             raise ValueError("项目列表已变化，请刷新后重新排序")
+        if scoped and any(project.get("business_line") != scope for project in selected):
+            raise ConflictError("项目标签已变化，请刷新后重新排序")
+        orders = None
+        if scoped:
+            # Replace only the selected slots in the shared order. Normalize the
+            # active sequence to avoid legacy missing/duplicate numeric orders;
+            # completed projects and concurrent additions keep their positions.
+            ordered = sorted((p for p in data["projects"] if not p.get("deleted_at") and not p.get("archived")),
+                             key=lambda p: (_order_number(p.get("sort_order")), -bool(p.get("core")),
+                                            p.get("created") or "", p.get("name") or "", p["id"]))
+            selected_ids, replacements = set(ids), iter(selected)
+            ordered = [next(replacements) if p["id"] in selected_ids else p for p in ordered]
+            orders = [{"id": p["id"], "sort_order": order} for order, p in enumerate(ordered)]
+        else:
+            ordered = selected
         # A hidden/completed project or an item added since the caller loaded is
-        # untouched. Concurrent content edits survive because we read under lock.
+        # retained. Concurrent content edits survive because we read under lock.
         stamp = timestamp()
-        for order, project in enumerate(selected):
-            project["sort_order"] = order
-            stamp_fields(project, ["sort_order"], stamp)
+        for order, project in enumerate(ordered):
+            if not scoped or project.get("sort_order") != order:
+                project["sort_order"] = order
+                stamp_fields(project, ["sort_order"], stamp)
         _atomic_write_todos(data)
     schedule_sync()
-    return {"ok": True, "updated": data["updated"], "revision": data["revision"]}
+    result = {"ok": True, "updated": data["updated"], "revision": data["revision"]}
+    if orders is not None:
+        result["orders"] = orders
+    return result
 
 
 def reorder_milestones(item):
@@ -1594,6 +1751,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._entity_response("projects", save_project_template(project_id))
             elif path == "/people/upsert":
                 self._json(upsert_people(self._payload()))
+            elif path == "/people/merge":
+                self._json(merge_people(self._payload()))
             elif path == "/weekly-report/groups":
                 self._json(update_weekly_report_groups(self._payload()))
             elif path == "/milestones/add":

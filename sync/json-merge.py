@@ -11,6 +11,7 @@ import json
 import os
 import sys
 import tempfile
+import unicodedata
 
 CONFIG_COLLECTIONS = ("people", "weekly_report_groups")
 COLLECTIONS = ("tasks", "projects", "milestones", *CONFIG_COLLECTIONS)
@@ -57,10 +58,28 @@ def validate(data, *, allow_missing_tasks=False):
             if record.get("deleted_at") is not None and not isinstance(record["deleted_at"], str):
                 raise ValueError("deleted_at must be a timestamp or null")
             string_fields = {"projects": ("dingtalk_group_id", "prd_url", "materials_url"),
-                             "people": ("name", "employee_id"),
+                             "people": ("name", "employee_id", "chinese_name", "english_name",
+                                        "dingtalk_user_id", "merged_into", "_merge_fingerprint"),
                              "weekly_report_groups": ("group_id",)}.get(name, ())
             if any(key in record and not isinstance(record[key], str) for key in string_fields):
                 raise ValueError("follow-up configuration fields must be strings")
+            if name == "people":
+                def valid_person_text(value, *, allow_empty=True, allow_spaces=True):
+                    return (isinstance(value, str) and (allow_empty or bool(value.strip()))
+                            and len(value.strip()) <= 256
+                            and not any(unicodedata.category(char) in ("Cc", "Cf", "Cs") for char in value)
+                            and (allow_spaces or not any(char.isspace() for char in value.strip())))
+                for field in ("chinese_name", "english_name", "dingtalk_user_id", "merged_into", "_merge_fingerprint"):
+                    if field in record and not valid_person_text(record[field], allow_spaces=field in ("chinese_name", "english_name")):
+                        raise ValueError("invalid person metadata text")
+                if "aliases" in record:
+                    aliases = record["aliases"]
+                    if (not isinstance(aliases, list) or len(aliases) > 30
+                            or any(not valid_person_text(alias, allow_empty=False) for alias in aliases)):
+                        raise ValueError("aliases must contain at most 30 non-empty names")
+            if name == "projects" and record.get("business_line") is not None:
+                if not isinstance(record["business_line"], str) or record["business_line"] not in ("crm", "logistics"):
+                    raise ValueError("business_line must be crm, logistics or null")
             if name == "projects" and "template_snapshot" in record:
                 snapshot = record["template_snapshot"]
                 if (not isinstance(snapshot, dict) or not isinstance(snapshot.get("milestones"), list)
@@ -159,6 +178,8 @@ def merge_record(base, ours, theirs, *, collection=None):
         # A name and employee number identify one recipient. Never combine a
         # name from one device with an employee number from another device.
         groups.append(("name", "employee_id"))
+        # A source cannot become active independently from its merge destination.
+        groups.append(("deleted_at", "merged_into", "_merge_fingerprint"))
     grouped = {key for group in groups for key in group}
     groups += [(key,) for key in sorted(all_keys - grouped - {"_field_updated", "updated_at"})]
     for keys in groups:

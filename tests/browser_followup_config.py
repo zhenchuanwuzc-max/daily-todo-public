@@ -54,7 +54,7 @@ def main():
                     if name == "编辑":
                         page.locator("#projectDetail .project-heading h2[role=button]").click()
                         return
-                    selector = "#globalSettings" if name in ("人员维护", "周报接收群") else ".project-actions details.action-menu"
+                    selector = "#globalSettings"
                     menu = page.locator(selector)
                     if not menu.evaluate("node => node.open"):
                         menu.locator("summary").click()
@@ -89,7 +89,8 @@ def main():
                     project_card(value).click(button="right")
                     context_menu.wait_for(state="visible")
                     assert entity.is_hidden(), "Right-click must open the project menu before the editor"
-                    assert context_menu.get_by_role("menuitem").all_text_contents() == ["编辑", "新增 1 个事项", "新增 2 个事项", "删除"]
+                    expected = ["编辑", "添加里程碑", "删除"] if value["id"] == project["id"] else ["编辑", "添加里程碑", "新增 1 个事项", "新增 2 个事项", "删除"]
+                    assert context_menu.get_by_role("menuitem").all_text_contents() == expected
 
                 def assert_project_editor(value):
                     entity.wait_for(state="visible")
@@ -187,10 +188,12 @@ def main():
                 assert next(value for value in server.read_data()["projects"] if value["id"] == other["id"])["deleted_at"]
                 assert project_card(other).count() == 0
                 assert server.read_data()["tasks"] == original_tasks
-                menu_action("恢复项目")
-                page.locator(f'#projectRestoreList [data-project-id="{other["id"]}"]').get_by_role("button", name="恢复到进行中", exact=True).click()
-                page.locator("#projectRestoreDialog").wait_for(state="hidden")
-                settle()
+                assert "恢复项目" not in page.locator(".project-actions .action-menu-list button").all_text_contents()
+                response = context.request.post(url + "/projects/" + other["id"] + "/restore", data={})
+                assert response.ok, response.text()
+                page.reload()
+                page.locator("#projectsTab").click()
+                project_card(other).wait_for()
                 assert not next(value for value in server.read_data()["projects"] if value["id"] == other["id"])["deleted_at"]
                 assert project_card(other).count() == 1
                 project_card(project).click()
@@ -231,7 +234,9 @@ def main():
                 menu_action("人员维护")
                 assert page.locator("#peopleTitle").inner_text() == "人员维护"
                 assert page.locator("#peopleList .person-row").count() == 3
-                assert person_row("测试甲").locator('[name="name"]').get_attribute("readonly") is not None
+                assert page.locator("#peopleDialog .people-columns span").all_text_contents() == ["中文名", "英文名", "工号"]
+                assert page.locator('#peopleList [name="name"]:visible').count() == 0
+                assert person_row("测试甲").locator('[name="name"]').get_attribute("type") == "hidden"
                 assert person_row("Ocean").locator('[name="employee_id"]').input_value() == ""
                 page.locator("#peopleCancel").click()
                 settle()
@@ -240,7 +245,7 @@ def main():
                 person_row("测试甲").locator('[name="employee_id"]').fill("00123")
                 page.locator("#addPersonBtn").click()
                 added = page.locator("#peopleList .person-row").last
-                added.locator('[name="name"]').fill("测试丙")
+                added.locator('[name="chinese_name"]').fill("测试丙")
                 added.locator('[name="employee_id"]').fill("00999")
                 save("#peopleDialog", "#peopleSave")
                 assert person("测试甲")["employee_id"] == "00123"

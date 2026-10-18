@@ -105,7 +105,7 @@ def main():
                 def open_completed(project_id=None):
                     page.locator("#projectsTab").click()
                     settle()
-                    menu = page.locator("#projectDetail .project-actions details.action-menu")
+                    menu = page.locator("#globalSettings")
                     if not menu.evaluate("node => node.open"):
                         menu.locator("summary").click()
                     menu.get_by_role("button", name="已完成项目", exact=True).click()

@@ -131,10 +131,22 @@ def main():
                 assert basic_task['project_id'] == 'basic' and not basic_task.get('milestone_id')
                 drafts().first.get_by_role('button', name='取消新增事项').click()
                 settle()
-                # Project-menu entry on a structured project opens only its unassigned area.
+                # Structured projects keep task creation in the milestone menu.
                 page.locator('#projectList [data-project-id=p]').click(button='right')
+                assert page.get_by_role('menu', name='项目操作').get_by_role('menuitem').all_text_contents() == ['编辑', '添加里程碑', '删除']
+                assert page.locator('.project-actions details.action-menu').count() == 0
+                milestone_count = len(server.read_data()['milestones'])
+                page.get_by_role('menuitem', name='添加里程碑', exact=True).click()
+                assert page.locator('#entityTitle').inner_text() == '新建里程碑'
+                assert page.locator('#projectList [data-project-id=p]').get_attribute('aria-current') == 'true'
+                page.locator('#entityDialog [name=name]').fill('未保存的里程碑')
+                page.locator('#entityCancel').click()
+                settle()
+                assert len(server.read_data()['milestones']) == milestone_count
+                page.locator('#projectList [data-project-id=p]').click()
+                page.locator('section[data-milestone-id=m1] .milestone-title').click(button='right')
                 page.get_by_role('menuitem', name='新增 1 个事项', exact=True).click()
-                assert draft_rows('').count() == 1 and not draft_rows('m1').count()
+                assert draft_rows('m1').count() == 1 and not draft_rows('').count()
                 assert drafts().first.locator('[name=text]').evaluate('n => n === document.activeElement')
                 for width in (775, 1013, 1305):
                     page.set_viewport_size({'width': width, 'height': 774})

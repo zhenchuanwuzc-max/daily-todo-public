@@ -58,7 +58,7 @@ jobs:
           archive, = (root / 'Resources/lib').glob('python*.zip')
           with zipfile.ZipFile(archive) as z:
               embedded = z.read('server.pyc')
-              assert b'reorder_projects' in embedded and b'launch_date' in embedded
+              assert all(name in embedded for name in (b'reorder_projects', b'launch_date', b'business_line', b'merge_people'))
           binaries = 0
           for path in root.rglob('*'):
               if not path.is_file() or path.is_symlink():
@@ -96,4 +96,4 @@ jobs:
           make_latest: false
           fail_on_unmatched_files: true
           files: release-assets/*
-          body_path: docs/RELEASE-1.1.4.md
+          body_path: docs/RELEASE-1.1.5.md

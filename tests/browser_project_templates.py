@@ -36,9 +36,6 @@ def main():
                 def settle():
                     page.evaluate('document.activeElement?.blur()')
                     page.wait_for_function('mutationCount===0 && !renderPending')
-                def menu(name):
-                    page.locator('#projectDetail .action-menu summary').click()
-                    page.locator('#projectDetail .action-menu').get_by_role('button',name=name,exact=True).click()
                 page.add_init_script("localStorage.setItem('tracking-time-range','all');localStorage.setItem('tracking-task-sort','manual')")
                 page.goto(url)
                 page.wait_for_function('state.projects?.length===1')
@@ -47,7 +44,11 @@ def main():
                 assert page.locator('#entityTemplateLabel').is_visible()
                 assert page.locator('#entityTemplate option:checked').inner_text()=='基础模板（无里程碑）'
                 page.locator('#entityCancel').click()
-                menu('保存为任务模板')
+                assert not set(page.locator('.project-actions .action-menu-list button').all_text_contents()) & {
+                    '里程碑排序', '恢复项目', '保存为任务模板', '更新任务模板'}
+                response=page.request.post(url+'/projects/source/template',data={})
+                assert response.ok,response.text()
+                page.evaluate('readState(true)')
                 settle()
                 assert server.read_data()['projects'][0]['template_snapshot']['tasks'][0]['text']=='模板事项'
                 page.locator('#newProjectBtn').click()

@@ -26,6 +26,12 @@ def main():
                 page.goto(f'http://127.0.0.1:{httpd.server_port}');page.wait_for_function('state.tasks?.length===1')
                 def settle():page.wait_for_function('mutationCount===0 && !renderPending')
                 def task():return next(t for t in server.read_data()['tasks'] if t['id']=='t')
+                page.locator('#globalSettings > summary').click()
+                page.locator('#globalSettings').get_by_role('button',name='人员维护',exact=True).click()
+                assert page.locator('#peopleDialog .people-columns span').all_text_contents()==['中文名','英文名','工号']
+                assert page.locator('#peopleList [name=name]:visible').count()==0
+                assert page.locator('#peopleList [name=name]').evaluate_all("nodes => nodes.every(node => node.type === 'hidden')")
+                page.locator('#peopleCancel').click();page.locator('#peopleDialog').wait_for(state='hidden');settle()
                 row=page.locator('#groups [data-id=t]');toggle=row.locator('.person-picker-toggle')
                 toggle.click();popup=page.locator('.person-options');box=page.get_by_role('listbox',name='选择负责人')
                 assert box.get_attribute('aria-multiselectable')=='true'

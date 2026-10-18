@@ -31,6 +31,12 @@ def main():
                 assert ids()==['d0','recurring','d1','d2'],ids()
                 assert page.locator('#group-P1 .drag-handle').count()==0
                 assert page.locator('#groups [data-id=d0] .association-project-label').inner_text()=='项目'
+                association=page.locator('#groups [data-id=d0] .association')
+                assert association.locator('option').all_text_contents()==['不关联项目','项目']
+                current_link=association.input_value()
+                association.select_option(current_link);settle()
+                assert next(t for t in server.read_data()['tasks'] if t['id']=='d0')['milestone_id']=='m'
+                assert page.locator('#newAssociation option').all_text_contents()==['不关联项目','项目']
                 assert page.locator('#group-DN [data-id=done]').count()==1
                 assert page.locator('.app-toolbar #taskTimeRange').count()==0
                 assert not page.locator('#taskTimeRange').is_visible()

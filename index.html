@@ -733,12 +733,16 @@ body { min-width:900px; padding:16px 20px; }
 .person-options .person-option-footer .person-confirm:disabled { opacity:.45; cursor:not-allowed; }
 #projectsView { display:grid; grid-template-columns:260px minmax(0,1fr); gap:28px; align-items:start; }
 .project-sidebar { position:sticky; top:20px; }
+.project-labels { display:flex; gap:2px; padding:3px; margin-bottom:6px; border:1px solid var(--line); border-radius:8px; background:var(--bg); }
+.project-labels button { flex:1; min-width:0; min-height:30px; padding:4px 8px; border:0; border-radius:5px; background:transparent; color:var(--muted); font:inherit; font-size:13px; cursor:pointer; }
+.project-labels button[aria-pressed=true] { background:#eaf3f0; color:var(--accent); font-weight:500; }
+.project-labels button:hover { background:var(--hover); }
 .project-item { display:block; border:1px solid transparent; border-radius:7px; width:100%; min-height:52px; padding:8px 10px; margin-bottom:2px; background:transparent; text-align:left; cursor:pointer; font:inherit; }
 .project-item strong { display:block; font-size:14px; line-height:18px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .project-item small { display:block; margin-top:2px; color:var(--muted); font-size:11px; line-height:14px; }
 .project-item[aria-current=true] { background:#eaf3f0; border-color:#d4e7e0; color:var(--accent); }
 .project-item:hover { background:var(--hover); }
-#projectList { max-height:calc(100dvh - 170px); overflow-y:auto; overscroll-behavior:contain; }
+#projectList { max-height:calc(100dvh - 212px); overflow-y:auto; overscroll-behavior:contain; }
 #projectList .project-item { user-select:none; touch-action:pan-x; }
 .project-item.project-drag-placeholder { opacity:.3; border:1px dashed var(--accent); }
 .project-drag-preview { position:fixed; z-index:1200; pointer-events:none; margin:0; background:var(--surface); box-shadow:0 6px 20px rgba(0,0,0,.12); opacity:.95; }
@@ -775,6 +779,12 @@ button:disabled { cursor:default; opacity:.5; }
 .milestone { margin-bottom:18px; }
 .milestone.empty { padding:0; }
 .milestone-head { display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line); padding:6px 0; }
+.milestone-drag-handle { flex-shrink:0; width:24px; height:28px; padding:0; border:0; border-radius:4px; background:transparent; color:var(--muted); font:inherit; font-size:17px; cursor:grab; touch-action:none; }
+.milestone-drag-handle:hover { background:var(--hover); color:var(--accent); }
+.milestone-drag-handle:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.milestone-drag-placeholder { opacity:.4; outline:1px dashed var(--accent); outline-offset:3px; }
+.milestone-drag-preview { position:fixed; z-index:1200; pointer-events:none; padding:8px 12px; border:1px solid var(--line); border-radius:7px; background:var(--surface); box-shadow:0 6px 20px rgba(0,0,0,.12); }
+body.milestone-dragging,body.milestone-dragging * { cursor:grabbing !important; user-select:none !important; }
 button.milestone-title:hover { background:var(--hover); }
 .milestone-title { display:inline-flex; align-items:center; min-height:28px; border:0; background:none; text-align:left; font:inherit; font-weight:600; color:var(--text); min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 button.milestone-title { cursor:pointer; }
@@ -807,6 +817,8 @@ button.milestone-title { cursor:pointer; }
 #entityDialog::backdrop,#projectRestoreDialog::backdrop,#completedProjectsDialog::backdrop,#milestoneOrderDialog::backdrop,#peopleDialog::backdrop,#weeklyReportGroupsDialog::backdrop { background:rgba(25,35,30,.2); }
 #entityForm h2,#projectRestoreDialog h2,#completedProjectsDialog h2,#milestoneOrderDialog h2,#peopleDialog h2,#weeklyReportGroupsDialog h2 { font-size:22px; margin-bottom:24px; }
 .person-row,.people-columns { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; }
+#peopleDialog { width:800px; }
+#peopleDialog .person-row,#peopleDialog .people-columns { grid-template-columns:minmax(100px,1fr) minmax(100px,1fr) 110px; gap:10px; }
 .people-columns { font-size:12px; color:var(--text-2); margin-bottom:8px; }
 .person-row { margin-bottom:10px; }
 .person-row input,#weeklyReportGroupIds { min-width:0; width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:7px; background:var(--bg); color:var(--text); font:inherit; line-height:1.5; }
@@ -836,8 +848,23 @@ button.milestone-title { cursor:pointer; }
 #entityForm .person-picker-toggle { min-height:42px; }
 #entityForm textarea { min-height:120px; resize:vertical; }
 #entityForm select { display:block; width:100%; min-height:42px; margin-top:8px; padding:8px 10px; border:1px solid var(--line); border-radius:7px; background:var(--bg); color:var(--text); font:inherit; }
+#entityBusinessLineLabel { margin:18px 0; color:var(--text-2); font-size:14px; }
+.entity-tag-choices { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.entity-tag-choices button { min-width:72px; min-height:36px; padding:7px 16px; border:1px solid var(--line); border-radius:7px; color:var(--text-2); background:var(--bg); font:inherit; cursor:pointer; }
+.entity-tag-choices button[aria-pressed=true] { border-color:var(--accent); background:#eaf3f0; color:var(--accent); }
+#entityCoreLabel { margin-left:8px; }
+#entityForm .entity-owner-date-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:18px 0; }
+#entityForm .entity-owner-date-row label { min-width:0; margin:0; }
+#entityDialog { padding:0; overflow:hidden; }
+#entityForm { display:flex; flex-direction:column; max-height:calc(100vh - 42px); max-height:calc(100dvh - 42px); }
+.entity-dialog-head { flex-shrink:0; padding:24px 32px 16px; }
+#entityForm .entity-dialog-head h2 { margin:0; }
+.entity-dialog-body { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:0 32px 4px; }
+.entity-dialog-footer { flex-shrink:0; position:relative; z-index:2; padding:16px 32px; border-top:1px solid var(--line); background:var(--surface); }
+#entityForm .entity-dialog-footer .dialog-actions { margin:0; }
+#entityForm .entity-dialog-footer p { margin:0 0 10px; }
+#entityForm #entityError:empty { display:none; }
 #entityTemplateHint { margin-top:6px; font-size:12px; color:var(--muted); line-height:1.6; }
-#entityForm .check-label { display:flex; align-items:center; gap:8px; }
 #entityForm #entityError { color:#b42318; font-size:12px; min-height:16px; }
 .entity-milestone-actions { display:flex; flex-wrap:wrap; gap:8px; border-top:1px solid var(--line); padding-top:18px; margin-top:22px; }
 .entity-milestone-actions button { min-height:36px; }
@@ -846,6 +873,17 @@ button.milestone-title { cursor:pointer; }
 .dialog-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:24px; }
 .dialog-actions button { min-width:88px; min-height:42px; padding:9px 20px; font-size:14px; }
 @media(max-width:1150px) { .app-layout{grid-template-columns:105px minmax(0,1fr);gap:12px;} #projectsView{grid-template-columns:220px minmax(0,1fr);gap:16px;} .inline-task .association{flex-basis:104px;width:104px;} .inline-task .owner-input{width:56px;flex-basis:56px;} }
+@media(max-width:900px) {
+  body { min-width:0; padding:12px; }
+  #projectsView { grid-template-columns:180px minmax(0,1fr); gap:12px; }
+  .new-task-main { grid-template-columns:minmax(120px,1fr) 104px 132px auto auto; gap:8px; }
+  .project-heading { align-items:flex-start; flex-wrap:wrap; }
+  .project-actions { margin-left:auto; }
+  :is(#projectDetail .inline-task,.project-task-preview) .deadline-wrap { flex-basis:106px; }
+  :is(#projectDetail .inline-task,.project-task-preview) .pri-select { width:38px; }
+  .inline-task .association-field { flex-basis:90px; width:90px; }
+  .milestone-head { flex-wrap:wrap; }
+}
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; transition:none !important; } }
 
 </style>
@@ -883,7 +921,7 @@ button.milestone-title { cursor:pointer; }
     <div id="newTaskOptions" class="new-task-options" hidden>
       <label class="add-field">优先级<select id="newPri" title="优先级"><option>P0</option><option selected>P1</option><option>P2</option></select></label>
       <label class="add-field">分类<select id="newTag" title="分类"><option value="work">工作</option><option value="startup">创业</option><option value="personal">个人</option></select></label>
-      <label class="add-field">项目与里程碑<select id="newAssociation" class="association" aria-label="所属项目和里程碑"><option value="">不关联项目</option></select></label>
+      <label class="add-field">项目<select id="newAssociation" class="association" aria-label="所属项目"><option value="">不关联项目</option></select></label>
     </div>
   </form>
   <div id="taskViewSettings" class="things-list-controls" hidden>
@@ -904,6 +942,11 @@ button.milestone-title { cursor:pointer; }
 </div>
 <section id="projectsView" role="tabpanel" aria-labelledby="projectsTab" hidden>
   <aside class="project-sidebar">
+    <div id="projectLabels" class="project-labels" role="group" aria-label="项目标签">
+      <button type="button" data-project-label="all" aria-pressed="true">全部</button>
+      <button type="button" data-project-label="crm" aria-pressed="false">CRM</button>
+      <button type="button" data-project-label="logistics" aria-pressed="false">物流</button>
+    </div>
     <div id="projectList"></div>
     <button id="newProjectBtn" class="project-add" type="button">＋ 新增项目</button>
   </aside>
@@ -913,21 +956,35 @@ button.milestone-title { cursor:pointer; }
 </div>
 <dialog id="entityDialog">
   <form id="entityForm">
-    <h2 id="entityTitle"></h2>
+    <div class="entity-dialog-head"><h2 id="entityTitle"></h2></div>
+    <div class="entity-dialog-body">
     <label>名称<input name="name" required maxlength="200" autocomplete="off"></label>
+    <div id="entityBusinessLineLabel">
+      <span id="entityTagsTitle">标签</span>
+      <div class="entity-tag-choices" role="group" aria-labelledby="entityTagsTitle">
+        <button type="button" data-entity-business-line="crm" aria-pressed="false" title="再次点击取消选择">CRM</button>
+        <button type="button" data-entity-business-line="logistics" aria-pressed="false" title="再次点击取消选择">物流</button>
+        <button type="button" id="entityCoreLabel" aria-pressed="false">核心项目</button>
+      </div>
+      <input name="business_line" type="hidden"><input name="core" type="checkbox" hidden>
+    </div>
     <label id="entityTemplateLabel" hidden>任务模板<select name="template_id" id="entityTemplate"></select><p id="entityTemplateHint"></p></label>
+    <div class="entity-owner-date-row">
     <label>负责人<input name="owner" list="peopleOptions" required autocomplete="off"></label>
     <label id="entityLaunchDateLabel">预计上线时间（可选）<input name="launch_date" type="date"></label>
+    <label id="entityDueLabel">目标日期（可选）<input name="due" type="date"></label>
+    </div>
     <label id="entityDingtalkGroupLabel">钉钉群号（可选）<input name="dingtalk_group_id" maxlength="256" autocomplete="off"></label>
     <label id="entityPrdLabel">PRD 地址（可选）<input name="prd_url" type="url" maxlength="4096" placeholder="https://" autocomplete="off"></label>
     <label id="entityMaterialsLabel">运营物料地址（可选）<input name="materials_url" type="url" maxlength="4096" placeholder="https://" autocomplete="off"></label>
     <label id="entityGoalLabel">目标（可选）<textarea name="goal" rows="2"></textarea></label>
-    <label id="entityDueLabel">目标日期（可选）<input name="due" type="date"></label>
-    <label id="entityCoreLabel" class="check-label"><input name="core" type="checkbox"> 核心项目</label>
     <div id="entityMilestoneActions" class="entity-milestone-actions" hidden></div>
+    </div>
+    <div class="entity-dialog-footer">
     <p id="entityNotice" role="status" hidden></p>
     <p id="entityError" role="alert"></p>
     <div class="dialog-actions"><button type="button" id="entityCancel">取消</button><button type="submit" class="primary">保存</button></div>
+    </div>
   </form>
 </dialog>
 <dialog id="projectRestoreDialog" aria-labelledby="projectRestoreTitle">
@@ -953,7 +1010,7 @@ button.milestone-title { cursor:pointer; }
 <dialog id="peopleDialog" aria-labelledby="peopleTitle">
   <form id="peopleForm">
     <h2 id="peopleTitle">人员维护</h2>
-    <div class="people-columns" aria-hidden="true"><span>姓名</span><span>工号（可稍后填写）</span></div>
+    <div class="people-columns" aria-hidden="true"><span>中文名</span><span>英文名</span><span>工号</span></div>
     <div id="peopleList"></div>
     <button id="addPersonBtn" class="subtle-button" type="button">＋ 添加人员</button>
     <p id="peopleError" role="alert"></p>
@@ -1011,6 +1068,7 @@ let lastUpdated = "";
 let dirty = false;
 let taskDrag = null;
 let projectDrag = null;
+let milestoneDrag = null;
 let taskRangeDay=todayStr();
 let taskTimeRange=localStorage.getItem('tracking-time-range')||'near';
 if(localStorage.getItem('tracking-range-day')&&localStorage.getItem('tracking-range-day')!==taskRangeDay)taskTimeRange='near';
@@ -1142,7 +1200,7 @@ function addDragHandle(li, projectView = false) {
     : "拖动排序（同一优先级）；也可用上下方向键";
   handle.setAttribute("aria-label", "拖动排序：" + li.querySelector(".text").textContent);
   handle.addEventListener("pointerdown", e => {
-    if (e.button !== 0 || dirty || taskDrag) return;
+    if (e.button !== 0 || dirty || taskDrag || projectDrag || milestoneDrag) return;
     e.preventDefault();
     const ul = li.parentElement;
     handle.title = ul.dataset.projectId ? "拖动排序（同一里程碑）；也可用上下方向键" : "拖动排序（同一优先级）；也可用上下方向键";
@@ -1223,7 +1281,7 @@ function addDragHandle(li, projectView = false) {
     }
   };
   handle.addEventListener("keydown", async e => {
-    if (!["ArrowUp", "ArrowDown"].includes(e.key) || dirty || taskDrag) return;
+    if (!["ArrowUp", "ArrowDown"].includes(e.key) || dirty || taskDrag || projectDrag || milestoneDrag) return;
     e.preventDefault();
     const ul = li.parentElement;
     const neighbor = e.key === "ArrowUp" ? li.previousElementSibling : li.nextElementSibling;
@@ -2061,6 +2119,8 @@ let readGeneration = 0;
 let renderPending = false;
 let activeTab = localStorage.getItem('tracking-tab') === 'projects' ? 'projects' : 'things';
 let selectedProject = localStorage.getItem('tracking-project') || '';
+let projectBusinessFilter = localStorage.getItem('tracking-project-label') || 'all';
+if(!['all','crm','logistics'].includes(projectBusinessFilter))projectBusinessFilter='all';
 let showCompletedProjectItems = localStorage.getItem('tracking-show-completed') === 'true';
 let projectDraftSequence = 0;
 let projectDraftFocus = '';
@@ -2111,7 +2171,7 @@ function isEditing() {
   return !!n && (n.isContentEditable || n.matches('input:not([type=checkbox]),textarea,select') || document.getElementById('entityDialog').open || document.getElementById('projectRestoreDialog').open || document.getElementById('completedProjectsDialog').open || document.getElementById('milestoneOrderDialog').open || document.getElementById('peopleDialog').open || document.getElementById('weeklyReportGroupsDialog').open);
 }
 function requestRender() {
-  if (isEditing() || taskDrag || projectDrag || mutationCount) { renderPending = true; return; }
+  if (isEditing() || taskDrag || projectDrag || milestoneDrag || mutationCount) { renderPending = true; return; }
   renderPending = false; render();
 }
 document.addEventListener('focusout', () => setTimeout(() => { if (renderPending) requestRender(); }, 0));
@@ -2130,7 +2190,7 @@ async function readState(force = false) {
   }
 }
 async function load() {
-  if (mutationCount || taskDrag || projectDrag || isEditing()) return;
+  if (mutationCount || taskDrag || projectDrag || milestoneDrag || isEditing()) return;
   try { await readState(); }
   catch (error) { status('读取失败：' + error.message + '；稍后自动重试。', true); }
 }
@@ -2211,25 +2271,27 @@ function associationValue(t) {
 }
 
 function associationPatch(value) {
+  if(value.startsWith('retained:')) {
+    const {project_id,milestone_id}=JSON.parse(value.slice('retained:'.length));
+    return {project_id:project_id||null,milestone_id:milestone_id||null};
+  }
   const [project_id,milestone_id] = value ? JSON.parse(value) : [null,null];
   return {project_id,milestone_id};
 }
 function fillAssociation(select, value = '') {
   select.replaceChildren();
   const option = (v,label,disabled=false) => {const o=el('option','',label);o.value=v;o.disabled=disabled;select.appendChild(o);};
-  if (value.startsWith('retained:')) {
-    const retained = JSON.parse(value.slice('retained:'.length));
-    option(value, retained.kind === 'project' ? '项目已删除' : '待安排 · 里程碑已删除', true);
-  }
+  const retained=value.startsWith('retained:')?JSON.parse(value.slice('retained:'.length)):null;
+  const currentProject=retained?retained.project_id:(value?JSON.parse(value)[0]:null);
+  if(retained?.kind==='project'&&(!projectById(currentProject)||projectById(currentProject).deleted_at))option(value,'项目已删除',true);
   option('', '不关联项目');
   const projects = state.projects.filter(p => !p.deleted_at).sort((a,b) => Number(!!b.core)-Number(!!a.core) || a.name.localeCompare(b.name));
   for (const p of projects) {
     const suffix = p.archived ? '（已归档）' : '';
-    option(JSON.stringify([p.id,null]), p.name + suffix + ' · 待安排');
-    for (const m of projectMilestones(p)) option(JSON.stringify([p.id,m.id]), p.name + suffix + ' · ' + m.name);
+    option(p.id===currentProject?value:JSON.stringify([p.id,null]), p.name + suffix);
   }
   select.value = value; select.dataset.empty = String(!value);
-  select.title = select.selectedOptions[0]?.textContent || '所属项目和里程碑';
+  select.title = select.selectedOptions[0]?.textContent || '所属项目';
 }
 function rowField(t, field, tag, type, fallback) {
   const key = t.id + ':' + field;
@@ -2320,12 +2382,13 @@ function renderTask(t, {projectView=false}={}) {
   dateWrap.append(deadline);
   let association,associationField;
   if(!projectView) {
-    association=el('select','association');association.setAttribute('aria-label','所属项目和里程碑');
+    association=el('select','association');association.setAttribute('aria-label','所属项目');
     fillAssociation(association,associationValue(t));
     association.disabled=!!(t.recurring||t.recur_source||t.auto_skipped);
     if(association.disabled) association.title='重复任务暂不关联项目';
     association.addEventListener('change',async()=>{
       const value=association.value;
+      if(value===associationValue(t)){association.blur();return;}
       if(!await patchTask(t.id,associationPatch(value))) {association.value=associationValue(t);}
       association.blur();
     });
@@ -2343,11 +2406,23 @@ function renderTask(t, {projectView=false}={}) {
 }
 
 render = function() {
+  const focused=document.activeElement;
+  const focusProject=focused?.closest('#projectList .project-item')?.dataset.projectId;
+  const focusMilestone=focused?.matches('.milestone-title')?focused.closest('section.milestone')?.dataset.milestoneId:null;
+  const focusHeading=focused?.matches('#projectDetail .project-heading h2')?selectedProject:null;
   thingRenderer();
   renderProjectList();renderProjectDetail();renderCoreSummary();renderPeopleOptions();
   const association=document.getElementById('newAssociation');fillAssociation(association,association.value);
   if(document.getElementById('reviewModal').classList.contains('show')) renderReview();
   applyTab();
+  // A queued refresh after closing a context menu must keep keyboard focus on
+  // the same project/milestone, even though its DOM node has been replaced.
+  if(!focused?.isConnected) {
+    const target=focusProject?[...document.querySelectorAll('#projectList .project-item')].find(n=>n.dataset.projectId===focusProject):
+      focusMilestone?[...document.querySelectorAll('section.milestone')].find(n=>n.dataset.milestoneId===focusMilestone)?.querySelector('.milestone-title'):
+      focusHeading===selectedProject?document.querySelector('#projectDetail .project-heading h2'):null;
+    target?.focus({preventScroll:true});
+  }
   if(projectDraftFocus&&activeTab==='projects'){
     const input=document.querySelector(`.milestone-add[data-draft-id="${projectDraftFocus}"] [name=text]`);
     if(input){projectDraftFocus='';input.focus({preventScroll:true});input.scrollIntoView({block:'nearest'});}
@@ -2379,7 +2454,7 @@ function renderCoreSummary() {
   const cards=el('div','core-summary-cards');root.append(cards);
   for(const p of projects) {
     const progress=projectProgress(p);
-    const summary=btn('',()=>{selectedProject=p.id;switchTab('projects');});
+    const summary=btn('',()=>{revealProject(p);switchTab('projects');});
     const first=el('div','core-summary-line');
     first.append(el('b','',p.name),el('span','',progress.tasks.length?`事项已完成 ${progress.done}/${progress.tasks.length} 件`:'尚未添加事项'));
     if(progress.overdue)first.append(el('span','overdue-text',progress.overdue+' 件逾期'));
@@ -2389,16 +2464,35 @@ function renderCoreSummary() {
     summary.append(first,second);summary.title='查看项目：'+p.name;cards.append(summary);
   }
 }
+function projectBusinessLine(p) { return ['crm','logistics'].includes(p?.business_line)?p.business_line:''; }
+function setProjectLabel(value) {
+  projectBusinessFilter=['crm','logistics'].includes(value)?value:'all';
+  localStorage.setItem('tracking-project-label',projectBusinessFilter);
+  for(const button of document.querySelectorAll('[data-project-label]'))button.setAttribute('aria-pressed',String(button.dataset.projectLabel===projectBusinessFilter));
+}
+function revealProject(p) {
+  setProjectLabel(projectBusinessLine(p));
+  selectedProject=p.id;localStorage.setItem('tracking-project',p.id);
+}
+for(const button of document.querySelectorAll('[data-project-label]'))button.addEventListener('click',()=>{
+  if(projectDrag||taskDrag||milestoneDrag||button.dataset.projectLabel===projectBusinessFilter)return;
+  setProjectLabel(button.dataset.projectLabel);viewingCompletedProject='';selectedProject='';
+  document.getElementById('projectList').scrollTop=0;
+  requestRender();
+});
 function visibleProjects() {
+  const compare=(a,b)=>a<b?-1:a>b?1:0;
   return state.projects.filter(p=>!p.deleted_at&&!p.archived&&!projectComplete(p))
-    .sort((a,b)=>(Number.isFinite(a.sort_order)?a.sort_order:Infinity)-(Number.isFinite(b.sort_order)?b.sort_order:Infinity)||Number(!!b.core)-Number(!!a.core)||(a.created||'').localeCompare(b.created||'')||a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
+    .sort((a,b)=>(Number.isFinite(a.sort_order)?a.sort_order:Infinity)-(Number.isFinite(b.sort_order)?b.sort_order:Infinity)||Number(!!b.core)-Number(!!a.core)||compare(a.created||'',b.created||'')||compare(a.name||'',b.name||'')||compare(a.id,b.id));
 }
 function renderProjectList() {
   const root=document.getElementById('projectList');root.replaceChildren();
-  const ps=visibleProjects();
+  setProjectLabel(projectBusinessFilter);
+  const ps=visibleProjects().filter(p=>projectBusinessFilter==='all'||projectBusinessLine(p)===projectBusinessFilter);
   const viewed=projectById(viewingCompletedProject);
   if(!viewed||viewed.deleted_at||viewed.archived||!projectComplete(viewed))viewingCompletedProject='';
   if(!ps.some(p=>p.id===selectedProject)&&!(viewingCompletedProject&&selectedProject===viewingCompletedProject))selectedProject=ps[0]?.id||'';
+  localStorage.setItem('tracking-project',selectedProject);
   for(const p of ps) {
     const progress=projectProgress(p);
     const b=btn('',()=>{viewingCompletedProject='';selectedProject=p.id;localStorage.setItem('tracking-project',p.id);renderProjectList();renderProjectDetail();},'project-item');
@@ -2407,22 +2501,25 @@ function renderProjectList() {
     bindProjectDrag(b);
     b.append(el('strong','',(p.core?'★ ':'')+p.name),el('small','',(p.owner||'Ocean')+(progress.tasks.length?` · ${progress.done}/${progress.tasks.length} 项完成`:'')));root.appendChild(b);
   }
-  if(!ps.length)root.append(el('p','project-hint','暂无进行中的项目'));
+  if(!ps.length)root.append(el('p','project-hint',projectBusinessFilter==='all'?'暂无进行中的项目':'暂无'+(projectBusinessFilter==='crm'?' CRM ':'物流')+'项目'));
 }
 
 async function persistProjectOrder(root,original) {
   const ids=Array.from(root.children,row=>row.dataset.projectId);
-  return mutate('/projects/reorder','POST',{ids},()=>{
-    ids.forEach((id,order)=>{const p=projectById(id);if(p)p.sort_order=order;});
+  const payload={ids,...(projectBusinessFilter!=='all'?{business_line:projectBusinessFilter}:{})};
+  return mutate('/projects/reorder','POST',payload,result=>{
+    for(const {id,sort_order} of result.orders||ids.map((id,sort_order)=>({id,sort_order}))) {
+      const p=projectById(id);if(p)p.sort_order=sort_order;
+    }
   },()=>{if(root.isConnected)original.forEach(row=>root.append(row));});
 }
 function bindProjectDrag(item) {
-  item.title='拖动调整项目顺序；Alt + 上下方向键排序；右键新增事项、编辑或删除';
+  item.title='拖动调整项目顺序；Alt + 上下方向键排序；右键打开项目菜单';
   item.setAttribute('aria-keyshortcuts','Alt+ArrowUp Alt+ArrowDown');
   let suppressClick=false;
   item.addEventListener('click',e=>{if(suppressClick){e.preventDefault();e.stopImmediatePropagation();}},true);
   item.addEventListener('pointerdown',e=>{
-    if(e.button!==0||dirty||taskDrag||projectDrag||isEditing())return;
+    if(e.button!==0||dirty||taskDrag||projectDrag||milestoneDrag||isEditing())return;
     projectDrag={item,root:item.parentElement,pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,y:e.clientY,
       original:Array.from(item.parentElement.children),moved:false,preview:null,frame:null};
     document.addEventListener('pointermove',move,{passive:false});
@@ -2473,7 +2570,7 @@ function bindProjectDrag(item) {
   const up=e=>finish(e),cancel=e=>finish(e,true);
   const escape=e=>{if(e.key==='Escape'&&projectDrag){e.preventDefault();finish({pointerId:projectDrag.pointerId},true);}};
   item.addEventListener('keydown',async e=>{
-    if(!e.altKey||!['ArrowUp','ArrowDown'].includes(e.key)||dirty||projectDrag||taskDrag)return;
+    if(!e.altKey||!['ArrowUp','ArrowDown'].includes(e.key)||dirty||projectDrag||taskDrag||milestoneDrag)return;
     e.preventDefault();const root=item.parentElement,neighbor=e.key==='ArrowUp'?item.previousElementSibling:item.nextElementSibling;if(!neighbor)return;
     const original=Array.from(root.children);root.insertBefore(item,e.key==='ArrowUp'?neighbor:neighbor.nextElementSibling);
     await persistProjectOrder(root,original);
@@ -2514,7 +2611,7 @@ function closeProjectContextMenu(restoreFocus=false) {
 function deleteProjectById(id) {
   const p=projectById(id);
   if(!p||p.deleted_at)return;
-  if(confirm('删除「'+p.name+'」？\n项目会隐藏，可在项目设置中恢复；事项仍保留在事情跟进中。'))mutate('/projects/'+encodeURIComponent(id),'DELETE');
+  if(confirm('删除「'+p.name+'」？\n项目会隐藏，事项仍保留在事情跟进中。'))mutate('/projects/'+encodeURIComponent(id),'DELETE');
 }
 function openProjectContextMenu(anchor,id,event,kind='project') {
   closeProjectContextMenu();
@@ -2528,14 +2625,20 @@ function openProjectContextMenu(anchor,id,event,kind='project') {
     }else{const p=projectById(id);if(p&&!p.deleted_at)openEntity('project',p);}
   });
   const remove=btn('删除',()=>{closeProjectContextMenu();if(kind==='milestone')deleteMilestoneById(id);else deleteProjectById(id);},'danger');
-  const additions=[1,2].map(count=>btn('新增 '+count+' 个事项',()=>{
+  const project=kind==='project'?projectById(id):null;
+  const milestoneAction=project?[btn('添加里程碑',()=>{
+    closeProjectContextMenu();const p=projectById(id);if(!p||p.deleted_at)return;
+    revealProject(p);switchTab('projects');openEntity('milestone',null,p);
+  })]:[];
+  const canAdd=kind==='milestone'||(project&&!projectMilestones(project).length);
+  const additions=(canAdd?[1,2]:[]).map(count=>btn('新增 '+count+' 个事项',()=>{
     closeProjectContextMenu();
     const m=kind==='milestone'?milestoneById(id):null,p=projectById(m?m.project_id:id);
     if(!p||p.deleted_at||(kind==='milestone'&&(!m||m.deleted_at)))return;
     openProjectDrafts(p,m,count);
   }));
-  for(const button of [edit,...additions,remove])button.setAttribute('role','menuitem');
-  menu.append(edit,...additions,remove);menu.hidden=false;
+  for(const button of [edit,...milestoneAction,...additions,remove])button.setAttribute('role','menuitem');
+  menu.append(edit,...milestoneAction,...additions,remove);menu.hidden=false;
   const box=anchor.getBoundingClientRect();
   const pointer=event.type==='contextmenu'&&(event.clientX||event.clientY);
   const x=pointer?event.clientX:box.left,y=pointer?event.clientY:box.bottom;
@@ -2572,7 +2675,7 @@ function openCompletedProjects() {
     const row=el('div','restore-project');row.dataset.completedProjectId=p.id;
     const text=el('div');text.append(el('strong','',p.name),el('small','',projectTasks(p).length+' 项已完成'));
     row.append(text,btn('查看',()=>{
-      viewingCompletedProject=p.id;selectedProject=p.id;showCompletedProjectItems=true;
+      viewingCompletedProject=p.id;revealProject(p);showCompletedProjectItems=true;
       document.getElementById('completedProjectsDialog').close();requestRender();
     },'subtle-button'));root.append(row);
   }
@@ -2592,31 +2695,52 @@ function ownerNames(value) {
   }
   return [...names.values()];
 }
+function personNames(person) {
+  return [...new Map([person.name,person.chinese_name,person.english_name,...(Array.isArray(person.aliases)?person.aliases:[])].filter(Boolean).map(name=>[personKey(name),name])).values()];
+}
+function personDisplayName(person) {
+  const parts=[person.chinese_name,person.english_name].filter(Boolean);
+  if(!parts.length)return person.name;
+  return [...new Map(parts.map(name=>[personKey(name),name])).values()].join(' · ');
+}
+function canonicalPersonName(name,people) {
+  const key=personKey(name),exact=people.find(person=>personKey(person.name)===key);
+  if(exact)return exact.name;
+  const matches=people.filter(person=>personNames(person).some(alias=>personKey(alias)===key));
+  return matches.length===1?matches[0].name:name;
+}
 function knownPeople() {
   const people=new Map();
   for(const person of state.people||[]) {
+    if(person.deleted_at||person.merged_into)continue;
     const name=person.name?.trim();
-    if(name)people.set(personKey(name),{name,employee_id:person.employee_id||''});
+    if(name)people.set(personKey(name),{...person,name,employee_id:person.employee_id||''});
+  }
+  const aliases=new Map();
+  for(const person of people.values())for(const name of personNames(person)){
+    const key=personKey(name);aliases.set(key,aliases.has(key)&&aliases.get(key)!==person.name?null:person.name);
   }
   for(const record of [...state.tasks,...state.projects,...state.milestones]) {
     if(record.deleted_at)continue;
     for(const name of ownerNames(record.owner||'Ocean')){
-      const key=personKey(name);if(!people.has(key))people.set(key,{name,employee_id:''});
+      const key=personKey(name);
+      if(!people.has(key)&&!aliases.get(key))people.set(key,{name,employee_id:''});
     }
   }
   if(!people.size)people.set(personKey('Ocean'),{name:'Ocean',employee_id:''});
-  return [...people.values()].sort((a,b)=>a.name.localeCompare(b.name,'zh-CN'));
+  return [...people.values()].sort((a,b)=>personDisplayName(a).localeCompare(personDisplayName(b),'zh-CN')||a.name.localeCompare(b.name,'zh-CN'));
 }
 function personPicker(input, commitOnSelect=false) {
   const wrap=el('span','person-picker');let applying=false;
   function open(fromInput=false){
     if(activeDatePicker?._saving)return;closeDatePicker();closePersonPicker();
     const names=ownerNames(input.value),query=fromInput?(input.value.split(/[、,，;；\n]/).pop()||'').trim():'';
-    const selected=new Map((fromInput?ownerNames(input.value.slice(0,input.value.length-(input.value.split(/[、,，;；\n]/).pop()||'').length)):names).map(name=>[personKey(name),name]));
+    const people=knownPeople();
+    const selected=new Map((fromInput?ownerNames(input.value.slice(0,input.value.length-(input.value.split(/[、,，;；\n]/).pop()||'').length)):names).map(name=>canonicalPersonName(name,people)).map(name=>[personKey(name),name]));
     const popup=el('div','person-options'),search=el('input','person-search'),list=el('div','person-option-list');
     search.type='search';search.placeholder='输入姓名或工号筛选';search.setAttribute('aria-label','筛选负责人');search.value=query;
     list.setAttribute('role','listbox');list.setAttribute('aria-label','选择负责人');list.setAttribute('aria-multiselectable','true');
-    const people=knownPeople();for(const [key,name] of selected)if(!people.some(p=>personKey(p.name)===key))people.push({name,employee_id:''});
+    for(const [key,name] of selected)if(!people.some(p=>personKey(p.name)===key))people.push({name,employee_id:''});
     let options=[];
     function refresh(){
       for(const option of options){const checked=selected.has(personKey(option.dataset.name));option.setAttribute('aria-selected',String(checked));option.querySelector('.person-check').textContent=checked?'✓':'';}
@@ -2624,10 +2748,11 @@ function personPicker(input, commitOnSelect=false) {
     }
     function renderOptions(){
       const term=personKey(search.value);list.replaceChildren();options=[];
-      for(const person of people.filter(p=>!term||personKey(p.name).includes(term)||String(p.employee_id||'').toLowerCase().includes(term))){
+      for(const person of people.filter(p=>!term||personNames(p).some(name=>personKey(name).includes(term))||String(p.employee_id||'').toLowerCase().includes(term))){
         const option=btn('',()=>{const key=personKey(person.name);if(selected.has(key))selected.delete(key);else selected.set(key,person.name);refresh();});
         option.dataset.name=person.name;option.setAttribute('role','option');option.setAttribute('aria-label',person.name);option.tabIndex=-1;
-        option.append(el('span','person-check'),el('span','person-name',person.name));if(person.employee_id)option.append(el('small','',person.employee_id));
+        option.title=[...personNames(person),person.employee_id].filter(Boolean).join(' · ');
+        option.append(el('span','person-check'),el('span','person-name',personDisplayName(person)));if(person.employee_id)option.append(el('small','',person.employee_id));
         list.append(option);options.push(option);
       }
       if(!options.length)list.append(el('div','person-no-match','未找到匹配人员，可直接输入姓名'));
@@ -2643,6 +2768,9 @@ function personPicker(input, commitOnSelect=false) {
       if(commitOnSelect)input.blur();
     },'person-confirm');confirm.setAttribute('aria-label','确认负责人');
     footer.append(cancel,confirm);popup.append(search,list,footer);
+    // Safari may blur the input without focusing a clicked button. Keep the
+    // picker open until that button's click has applied the selected people.
+    popup.addEventListener('pointerdown',e=>{if(e.target.closest('button'))e.preventDefault();});
     (input.closest('dialog')||document.body).append(popup);activePersonPicker={popup,toggle,input};toggle.setAttribute('aria-expanded','true');
     const position=()=>{const box=wrap.getBoundingClientRect();popup.style.left=Math.max(8,Math.min(box.left,innerWidth-popup.offsetWidth-8))+'px';popup.style.top=Math.max(8,Math.min(box.bottom+4,innerHeight-popup.offsetHeight-8))+'px';};
     activePersonPicker.position=position;renderOptions();position();
@@ -2704,12 +2832,18 @@ function renderPeopleOptions() {
 }
 function appendPersonRow(person=null) {
   const row=el('div','person-row');row.dataset.personName=person?.name||'';
-  const name=el('input');name.name='name';name.type='text';name.value=person?.name||'';name.placeholder='姓名';name.maxLength=256;name.autocomplete='off';name.readOnly=!!person;name.setAttribute('aria-label','姓名');
+  const name=el('input');name.name='name';name.type='hidden';name.value=person?.name||'';name.readOnly=!!person;
   const employee=el('input');employee.name='employee_id';employee.type='text';employee.value=person?.employee_id||'';employee.placeholder='待填写';employee.maxLength=256;employee.autocomplete='off';employee.spellcheck=false;employee.setAttribute('aria-label',(person?.name?person.name+'的':'')+'工号');
-  row.append(name,employee);document.getElementById('peopleList').append(row);return row;
+  row.append(name);
+  for(const [field,label] of [['chinese_name','中文名'],['english_name','英文名']]){
+    const input=el('input');input.name=field;input.value=person?.[field]||'';input.placeholder=label;input.maxLength=256;input.autocomplete='off';input.setAttribute('aria-label',(person?.name?person.name+'的':'')+label);
+    if(person&&!person.chinese_name&&!person.english_name&&((field==='chinese_name')===/[\u3400-\u9fff]/.test(person.name))){input.placeholder=person.name;input.title='原姓名：'+person.name;}
+    row.append(input);
+  }
+  row.append(employee);document.getElementById('peopleList').append(row);return row;
 }
 function openPeople() {
-  const people=knownPeople();peopleBase=new Map(people.map(person=>[personKey(person.name),person.employee_id]));
+  const people=knownPeople();peopleBase=new Map(people.map(person=>[personKey(person.name),{employee_id:person.employee_id,chinese_name:person.chinese_name||'',english_name:person.english_name||''}]));
   document.getElementById('peopleList').replaceChildren();people.forEach(appendPersonRow);
   document.getElementById('peopleError').textContent='';document.getElementById('peopleDialog').showModal();
   document.querySelector('#peopleList [name=employee_id]')?.focus();
@@ -2736,20 +2870,26 @@ async function saveFollowupConfig(form,errorId,path,payload,success) {
     controls.forEach(([control,disabled])=>{control.disabled=disabled;});delete form.dataset.saving;form.removeAttribute('aria-busy');
   }
 }
-document.getElementById('addPersonBtn').addEventListener('click',()=>appendPersonRow().querySelector('[name=name]').focus());
+document.getElementById('addPersonBtn').addEventListener('click',()=>appendPersonRow().querySelector('[name=chinese_name]').focus());
 document.getElementById('peopleForm').addEventListener('submit',async e=>{
   e.preventDefault();const form=e.currentTarget;if(form.dataset.saving==='true')return;
-  const changes=[],names=new Set(),error=document.getElementById('peopleError');error.textContent='';
+  const changes=[],names=new Set(),people=knownPeople(),error=document.getElementById('peopleError');error.textContent='';
   for(const row of document.querySelectorAll('#peopleList .person-row')) {
     const nameInput=row.querySelector('[name=name]'),employeeInput=row.querySelector('[name=employee_id]');
-    const name=nameInput.value.trim(),employee_id=employeeInput.value.trim();
-    if(!name&&!employee_id)continue;
-    if(!name){error.textContent='请填写姓名。';nameInput.focus();return;}
+    const employee_id=employeeInput.value.trim();
+    const chinese_name=row.querySelector('[name=chinese_name]').value.trim(),english_name=row.querySelector('[name=english_name]').value.trim();
+    const name=nameInput.value.trim()||canonicalPersonName(chinese_name||english_name,people);
+    if(!name&&!employee_id&&!chinese_name&&!english_name)continue;
+    if(!name){error.textContent='请填写中文名或英文名。';row.querySelector('[name=chinese_name]').focus();return;}
     const key=personKey(name);
-    if(names.has(key)){error.textContent='姓名重复，请合并为一行。';nameInput.focus();return;}
+    if(names.has(key)){error.textContent='姓名重复，请合并为一行。';row.querySelector('[name=chinese_name]').focus();return;}
     names.add(key);
-    const base_employee_id=peopleBase.get(key)||'';
-    if(!peopleBase.has(key)||employee_id!==base_employee_id)changes.push({name,employee_id,base_employee_id});
+    const base=peopleBase.get(key)||{employee_id:'',chinese_name:'',english_name:''};
+    const entry={name,employee_id,base_employee_id:base.employee_id};
+    for(const [field,value] of Object.entries({chinese_name,english_name}))if(value!==base[field]){
+      entry[field]=value;entry['base_'+field]=base[field];
+    }
+    if(!peopleBase.has(key)||employee_id!==base.employee_id||Object.hasOwn(entry,'chinese_name')||Object.hasOwn(entry,'english_name'))changes.push(entry);
   }
   if(!changes.length){document.getElementById('peopleDialog').close();return;}
   const ok=await saveFollowupConfig(form,'peopleError','/people/upsert',{people:changes},result=>{state.people=result.people;});
@@ -2761,7 +2901,8 @@ document.getElementById('weeklyReportGroupsForm').addEventListener('submit',asyn
   const ok=await saveFollowupConfig(form,'weeklyReportGroupsError','/weekly-report/groups',{group_ids,base_group_ids:weeklyReportGroupsBase},result=>{state.weekly_report_groups=result.weekly_report_groups;});
   if(ok)document.getElementById('weeklyReportGroupsDialog').close();
 });
-const globalSettings=settingsMenu('设置',[btn('人员维护',openPeople),btn('周报接收群',openWeeklyReportGroups)]);
+const completedProjectsButton=btn('已完成项目',openCompletedProjects);completedProjectsButton.hidden=true;
+const globalSettings=settingsMenu('设置',[btn('人员维护',openPeople),btn('周报接收群',openWeeklyReportGroups),completedProjectsButton]);
 globalSettings.id='globalSettings';
 globalSettings.querySelector('.action-menu-list').prepend(document.getElementById('taskViewSettings'));
 document.querySelector('.header-right').append(globalSettings);
@@ -2797,7 +2938,7 @@ async function restoreProject(p) {
   try {
     if(p.deleted_at)ok=await mutate('/projects/'+encodeURIComponent(p.id)+'/restore','POST',{});
     if(ok&&p.archived)ok=await mutate('/projects/'+encodeURIComponent(p.id),'PATCH',{archived:false});
-    if(ok){selectedProject=p.id;localStorage.setItem('tracking-project',p.id);dialog.close();}
+    if(ok){revealProject(p);dialog.close();}
     else {renderProjectRestoreList();document.getElementById('projectRestoreError').textContent='恢复未完成，请重试。';}
   } finally {
     controls.forEach(control=>{control.disabled=false;});
@@ -2865,17 +3006,33 @@ document.getElementById('milestoneOrderDialog').addEventListener('cancel',e=>{
   if(e.currentTarget.dataset.saving==='true')e.preventDefault();
 });
 
+function syncEntityTags() {
+  const f=document.getElementById('entityForm');
+  for(const button of document.querySelectorAll('[data-entity-business-line]'))button.setAttribute('aria-pressed',String(button.dataset.entityBusinessLine===f.elements.business_line.value));
+  document.getElementById('entityCoreLabel').setAttribute('aria-pressed',String(f.elements.core.checked));
+}
+for(const button of document.querySelectorAll('[data-entity-business-line]'))button.addEventListener('click',()=>{
+  const field=document.getElementById('entityForm').elements.business_line;
+  field.value=field.value===button.dataset.entityBusinessLine?'':button.dataset.entityBusinessLine;
+  syncEntityTags();
+});
+document.getElementById('entityCoreLabel').addEventListener('click',()=>{
+  const field=document.getElementById('entityForm').elements.core;field.checked=!field.checked;syncEntityTags();
+});
 function openEntity(kind, entity=null, project=null) {
   dialogContext={kind,entity,project,requestId:crypto.randomUUID()};
   const f=document.getElementById('entityForm');f.reset();
   document.getElementById('entityTitle').textContent=(entity?'编辑':'新建')+(kind==='project'?'项目':'里程碑');
   f.elements.name.value=entity?.name||'';
+  f.elements.business_line.value=entity?projectBusinessLine(entity):(projectBusinessFilter==='all'?'':projectBusinessFilter);
   f.elements.owner.value=entity?.owner||project?.owner||'Ocean';
   f.elements.launch_date.value=entity?.launch_date||'';
   f.elements.dingtalk_group_id.value=entity?.dingtalk_group_id||'';
   for(const field of ['prd_url','materials_url'])f.elements[field].value=entity?.[field]||'';
   f.elements.goal.value=entity?.goal||'';f.elements.due.value=entity?.due||'';f.elements.core.checked=!!entity?.core;
+  syncEntityTags();
   document.getElementById('entityGoalLabel').hidden=kind!=='project';document.getElementById('entityCoreLabel').hidden=kind!=='project';document.getElementById('entityDueLabel').hidden=kind==='project';
+  document.getElementById('entityBusinessLineLabel').hidden=kind!=='project';
   document.getElementById('entityDingtalkGroupLabel').hidden=kind!=='project';
   document.getElementById('entityLaunchDateLabel').hidden=kind!=='project';
   document.getElementById('entityPrdLabel').hidden=kind!=='project';
@@ -2888,10 +3045,11 @@ function openEntity(kind, entity=null, project=null) {
   document.getElementById('entityTemplateLabel').hidden=kind!=='project'||!!entity;
   updateTemplateHint();
   dialogContext.baseline=Object.fromEntries(['name','owner','goal','dingtalk_group_id','prd_url','materials_url'].map(field=>[field,f.elements[field].value.trim()]));
-  Object.assign(dialogContext.baseline,{core:f.elements.core.checked,due:f.elements.due.value||null,launch_date:f.elements.launch_date.value||null});
+  Object.assign(dialogContext.baseline,{core:f.elements.core.checked,due:f.elements.due.value||null,launch_date:f.elements.launch_date.value||null,business_line:f.elements.business_line.value||null});
   document.getElementById('entityError').textContent='';
   document.getElementById('entityNotice').hidden=true;
   renderEntityMilestoneActions();
+  document.querySelector('#entityForm .entity-dialog-body').scrollTop=0;
   document.getElementById('entityDialog').showModal();f.elements.name.focus();
 }
 function updateTemplateHint() {
@@ -2958,7 +3116,7 @@ document.getElementById('entityForm').addEventListener('submit',async e=>{
   const payload={name:f.elements.name.value.trim(),owner:ownerNames(f.elements.owner.value).join('、')};
   if(!payload.name||!payload.owner){document.getElementById('entityError').textContent='请填写名称和负责人';return;}
   if(c.kind==='project') {
-    Object.assign(payload,{goal:f.elements.goal.value.trim(),core:f.elements.core.checked,launch_date:f.elements.launch_date.value||null});
+    Object.assign(payload,{goal:f.elements.goal.value.trim(),core:f.elements.core.checked,launch_date:f.elements.launch_date.value||null,business_line:f.elements.business_line.value||null});
     const groupId=f.elements.dingtalk_group_id.value.trim();
     if(groupId!==(c.entity?.dingtalk_group_id||''))payload.dingtalk_group_id=groupId;
     for(const field of ['prd_url','materials_url']) {
@@ -2978,7 +3136,7 @@ document.getElementById('entityForm').addEventListener('submit',async e=>{
   }
   const base=c.kind==='project'?'/projects':'/milestones';
   const ok=await mutateEntity(base+(c.entity?'/'+encodeURIComponent(c.entity.id):'/add'),c.entity?'PATCH':'POST',payload,result=>{
-    if(c.kind==='project'&&!c.entity)selectedProject=result.project?.id||'';
+    if(c.kind==='project'&&result.project&&(!c.entity||(c.entity.id===selectedProject&&Object.hasOwn(payload,'business_line'))))revealProject(result.project);
   });
   if(ok)document.getElementById('entityDialog').close();
 });
@@ -2992,7 +3150,7 @@ function openProjectDrafts(p,m,count) {
     addDrafts.set(id,{id,projectId:p.id,milestoneId:m?.id||'',text:'',owner:'Ocean',deadline:m?.due||'',pending:false});
     if(!first)first=id;
   }
-  selectedProject=p.id;localStorage.setItem('tracking-project',p.id);
+  revealProject(p);
   if(projectComplete(p))viewingCompletedProject=p.id;
   projectDraftFocus=first;switchTab('projects');
 }
@@ -3025,6 +3183,86 @@ function milestoneAddForm(p,m,draft) {
   });
   return form;
 }
+function visibleMilestoneSections(root) {
+  return [...root.children].filter(n=>n.matches('section.milestone[data-milestone-id]'));
+}
+async function persistMilestoneDragOrder(root,projectId,original,focusId) {
+  const p=projectById(projectId);if(!p||p.deleted_at)return false;
+  const visible=visibleMilestoneSections(root).map(n=>n.dataset.milestoneId),selected=new Set(visible);
+  let next=0;
+  const ids=projectMilestones(p).map(m=>selected.has(m.id)?visible[next++]:m.id);
+  const ok=await mutate('/milestones/reorder','POST',{project_id:projectId,ids},()=>{
+    ids.forEach((id,sort_order)=>{const m=milestoneById(id);if(m)m.sort_order=sort_order;});
+  },()=>{if(root.isConnected)original.forEach(n=>root.append(n));});
+  if(document.activeElement===document.body||!document.activeElement?.isConnected){
+    [...document.querySelectorAll('#projectDetail section.milestone')].find(n=>n.dataset.milestoneId===focusId)?.querySelector('.milestone-drag-handle')?.focus({preventScroll:true});
+  }
+  return ok;
+}
+function bindMilestoneDrag(section,header,p,m) {
+  const handle=btn('⠿',()=>{},'milestone-drag-handle');
+  handle.setAttribute('aria-label','拖动里程碑：'+m.name);handle.setAttribute('aria-keyshortcuts','ArrowUp ArrowDown');
+  handle.title='拖动调整里程碑顺序；也可用上下方向键';header.prepend(handle);
+  handle.addEventListener('pointerdown',e=>{
+    if(e.button!==0||dirty||taskDrag||projectDrag||milestoneDrag||isEditing())return;
+    const root=section.parentElement;if(visibleMilestoneSections(root).length<2)return;
+    e.preventDefault();handle.focus({preventScroll:true});
+    milestoneDrag={section,root,pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,y:e.clientY,
+      original:[...root.children],moved:false,preview:null,frame:null};
+    document.addEventListener('pointermove',move,{passive:false});document.addEventListener('pointerup',up);
+    document.addEventListener('pointercancel',cancel);document.addEventListener('keydown',escape);
+    document.body.addEventListener('lostpointercapture',cancel);window.addEventListener('blur',blur);
+  });
+  function place(y){
+    const d=milestoneDrag;if(!d||d.section!==section)return;
+    const siblings=visibleMilestoneSections(d.root).filter(n=>n!==section);
+    const before=siblings.find(n=>{const box=n.querySelector('.milestone-head').getBoundingClientRect();return y<box.top+box.height/2;});
+    if(before)d.root.insertBefore(section,before);
+    else if(siblings.length)d.root.insertBefore(section,siblings[siblings.length-1].nextSibling);
+  }
+  function autoScroll(){
+    const d=milestoneDrag;if(!d||d.section!==section)return;
+    const delta=d.y<90?-12:d.y>innerHeight-48?12:0;
+    if(delta){window.scrollBy(0,delta);place(d.y);}
+    d.frame=requestAnimationFrame(autoScroll);
+  }
+  function move(e){
+    const d=milestoneDrag;if(!d||d.section!==section||e.pointerId!==d.pointerId)return;
+    d.y=e.clientY;
+    if(!d.moved){
+      if(Math.hypot(e.clientX-d.startX,e.clientY-d.startY)<6)return;
+      d.moved=true;closeProjectContextMenu();
+      const box=header.getBoundingClientRect(),preview=header.cloneNode(true);d.preview=preview;
+      preview.className='milestone-head milestone-drag-preview';preview.inert=true;preview.setAttribute('aria-hidden','true');
+      Object.assign(preview.style,{left:box.left+'px',top:box.top+'px',width:box.width+'px'});
+      document.body.append(preview);section.classList.add('milestone-drag-placeholder');document.body.classList.add('milestone-dragging');
+      document.body.setPointerCapture(e.pointerId);autoScroll();
+    }
+    e.preventDefault();d.preview.style.transform=`translate(${e.clientX-d.startX}px,${e.clientY-d.startY}px)`;place(e.clientY);
+  }
+  function finish(e,canceled=false){
+    const d=milestoneDrag;if(!d||d.section!==section||e.pointerId!==d.pointerId)return;
+    milestoneDrag=null;cancelAnimationFrame(d.frame);
+    document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',up);
+    document.removeEventListener('pointercancel',cancel);document.removeEventListener('keydown',escape);
+    document.body.removeEventListener('lostpointercapture',cancel);window.removeEventListener('blur',blur);
+    if(document.body.hasPointerCapture(e.pointerId))document.body.releasePointerCapture(e.pointerId);
+    section.classList.remove('milestone-drag-placeholder');document.body.classList.remove('milestone-dragging');d.preview?.remove();
+    if(canceled){d.original.forEach(n=>d.root.append(n));if(renderPending)requestRender();return;}
+    if(d.original.some((n,i)=>d.root.children[i]!==n))persistMilestoneDragOrder(d.root,p.id,d.original,m.id);
+    else if(renderPending)requestRender();
+  }
+  const up=e=>finish(e),cancel=e=>finish(e,true),blur=()=>{if(milestoneDrag?.section===section)finish({pointerId:milestoneDrag.pointerId},true);};
+  const escape=e=>{if(e.key==='Escape'&&milestoneDrag?.section===section){e.preventDefault();finish({pointerId:milestoneDrag.pointerId},true);}};
+  handle.addEventListener('keydown',async e=>{
+    if(!['ArrowUp','ArrowDown'].includes(e.key)||dirty||taskDrag||projectDrag||milestoneDrag)return;
+    e.preventDefault();e.stopPropagation();
+    const root=section.parentElement,siblings=visibleMilestoneSections(root),index=siblings.indexOf(section),neighbor=siblings[index+(e.key==='ArrowUp'?-1:1)];if(!neighbor)return;
+    const original=[...root.children];root.insertBefore(section,e.key==='ArrowUp'?neighbor:neighbor.nextSibling);
+    await persistMilestoneDragOrder(root,p.id,original,m.id);
+    [...document.querySelectorAll('#projectDetail section.milestone')].find(n=>n.dataset.milestoneId===m.id)?.querySelector('.milestone-drag-handle')?.focus({preventScroll:true});
+  });
+}
 function renderMilestone(p,m) {
   const tasks=m?milestoneTasks(m):projectTasks(p).filter(t=>!t.milestone_id||!milestoneById(t.milestone_id)||milestoneById(t.milestone_id).deleted_at);
   tasks.sort((a,b)=>(a.project_sort_order??Infinity)-(b.project_sort_order??Infinity)||nextOrder(a,b));
@@ -3039,6 +3277,7 @@ function renderMilestone(p,m) {
   header.append(heading);
   const metaText=[m?.owner||p.owner||'Ocean',m?.due||'',tasks.length?`${tasks.filter(t=>t.done).length}/${tasks.length} 完成`:''].filter(Boolean).join(' · ');
   header.append(el('span','milestone-meta',metaText));
+  if(m&&!p.deleted_at)bindMilestoneDrag(section,header,p,m);
   if(m||projectMilestones(p).length)section.append(header);
   const body=el('div');
   const ul=el('ul');ul.dataset.projectId=p.id;ul.dataset.milestoneId=m?.id||'';
@@ -3068,7 +3307,7 @@ function renderProjectDetail() {
     },'project-resource project-launch-date'));
   }heading.append(title);
   const actions=el('div','project-actions');
-  const buttons=[];
+  completedProjectsButton.hidden=!completedProjects().length;
   if(p&&!p.deleted_at) {
     const completedLabel=el('label','completed-visibility');
     const completed=el('input');completed.type='checkbox';completed.id='showCompletedProjectItems';completed.checked=showCompletedProjectItems;
@@ -3078,15 +3317,7 @@ function renderProjectDetail() {
       requestRender();document.getElementById('showCompletedProjectItems')?.focus({preventScroll:true});
     });
     completedLabel.append(completed,el('span','','显示已完成'));actions.append(completedLabel);
-    buttons.push(btn('添加里程碑',()=>openEntity('milestone',null,p)),btn('里程碑排序',()=>openMilestoneOrder(p)),btn('删除',()=>deleteProjectById(p.id),'danger'));
-    buttons.splice(2,0,btn(p.template_snapshot?'更新任务模板':'保存为任务模板',async e=>{
-      const button=e.currentTarget;button.disabled=true;
-      await mutate('/projects/'+encodeURIComponent(p.id)+'/template','POST',{},()=>showToast('任务模板已保存'));button.disabled=false;
-    }));
   }
-  if(completedProjects().length)buttons.push(btn('已完成项目',openCompletedProjects));
-  if(state.projects.some(project=>project.archived||project.deleted_at))buttons.push(btn('恢复项目',openProjectRestore));
-  if(buttons.length)actions.append(settingsMenu('项目设置',buttons));
   heading.append(actions);root.append(heading);
   if(!p){root.append(el('div','project-empty','选择一个项目查看进展，或点击左侧「＋ 新增项目」。'));return;}
   if(p.goal)root.append(el('p','project-goal',p.goal));
