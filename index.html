@@ -641,7 +641,7 @@ body { min-width:900px; padding:16px 20px; }
 .core-summary-line { display:flex; gap:6px 14px; flex-wrap:wrap; align-items:baseline; line-height:1.7; }
 .core-summary .overdue-text { color:#b42318; }
 #newTaskForm { display:block; padding:12px; }
-.new-task-main { display:grid; grid-template-columns:minmax(200px,1fr) 104px 168px auto auto; align-items:end; gap:12px; }
+.new-task-main { display:grid; grid-template-columns:minmax(200px,1fr) 104px 112px 64px auto auto; align-items:end; gap:12px; }
 .add .add-field { display:flex; flex-direction:column; gap:6px; min-width:0; font-size:11px; color:var(--muted); }
 .add .add-field input,.add .add-field select { width:100%; min-width:0; height:36px; border:1px solid var(--line); border-radius:6px; padding:7px 10px; background:var(--bg); font:inherit; font-size:13px; color:var(--text); }
 .add .add-field select { appearance:auto; -webkit-appearance:auto; }
@@ -649,7 +649,7 @@ body { min-width:900px; padding:16px 20px; }
 .add #addBtn,.add #newTaskMore { margin:0; min-height:36px; padding:7px 14px; font:inherit; font-size:12px; white-space:nowrap; }
 .add #newTaskMore { border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--text-2); cursor:pointer; }
 .add #newTaskMore[aria-expanded=true] { color:var(--accent); background:#eaf3f0; }
-.new-task-options { display:grid; grid-template-columns:130px 130px minmax(200px,1fr); gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+.new-task-options { display:grid; grid-template-columns:130px minmax(0,1fr); gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
 .inline-task { flex-wrap:nowrap; min-height:48px; gap:6px !important; font-size:13px; line-height:20px; }
 .inline-task .text { font-size:13px; line-height:20px; }
 .inline-task .text { flex:1 1 auto; min-width:80px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:5px 2px; border:1px solid transparent; border-radius:4px; }
@@ -876,7 +876,7 @@ button.milestone-title { cursor:pointer; }
 @media(max-width:900px) {
   body { min-width:0; padding:12px; }
   #projectsView { grid-template-columns:180px minmax(0,1fr); gap:12px; }
-  .new-task-main { grid-template-columns:minmax(120px,1fr) 104px 132px auto auto; gap:8px; }
+  .new-task-main { grid-template-columns:minmax(120px,1fr) 104px 112px 64px auto auto; gap:8px; }
   .project-heading { align-items:flex-start; flex-wrap:wrap; }
   .project-actions { margin-left:auto; }
   :is(#projectDetail .inline-task,.project-task-preview) .deadline-wrap { flex-basis:106px; }
@@ -915,11 +915,11 @@ button.milestone-title { cursor:pointer; }
       <label class="add-field">事项<input id="newText" type="text" placeholder="添加一件事…" aria-label="事项名称" required autocomplete="off"></label>
       <label class="add-field">负责人<input id="newOwner" class="owner-input" value="Ocean" placeholder="姓名" aria-label="负责人" list="peopleOptions" required></label>
       <label class="add-field">截止日期<input id="newDeadline" class="deadline-input" type="date" aria-label="截止日期" required></label>
+      <label class="add-field">优先级<select id="newPri" title="优先级"><option>P0</option><option selected>P1</option><option>P2</option></select></label>
       <button id="newTaskMore" type="button" aria-controls="newTaskOptions" aria-expanded="false">更多</button>
       <button id="addBtn" type="submit">添加</button>
     </div>
     <div id="newTaskOptions" class="new-task-options" hidden>
-      <label class="add-field">优先级<select id="newPri" title="优先级"><option>P0</option><option selected>P1</option><option>P2</option></select></label>
       <label class="add-field">分类<select id="newTag" title="分类"><option value="work">工作</option><option value="startup">创业</option><option value="personal">个人</option></select></label>
       <label class="add-field">项目<select id="newAssociation" class="association" aria-label="所属项目"><option value="">不关联项目</option></select></label>
     </div>
