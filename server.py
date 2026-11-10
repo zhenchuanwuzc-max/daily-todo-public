@@ -1311,7 +1311,7 @@ def schedule_matches(seed: dict, run_date: date) -> bool:
 
 
 def ensure_recurring_today() -> bool:
-    """检查所有种子，生成今日缺失的实例 + 自动 skip 过期未完成实例。返回是否有写入。"""
+    """按计划生成今日缺失的实例，保留已有实例的完成状态。"""
     today = today_str()
     run_date = date.fromisoformat(today)
     state = read_state()
@@ -1319,7 +1319,6 @@ def ensure_recurring_today() -> bool:
     state["last_generated"] = last_gen
 
     added = 0
-    skipped = 0
     with _write_lock:
         if not os.path.exists(DATA_FILE):
             return False
@@ -1329,24 +1328,12 @@ def ensure_recurring_today() -> bool:
         tasks = data.get("tasks", [])
         now_iso = timestamp()
 
-        for t in tasks:
-            if t.get("deleted_at") or not t.get("recur_source") or t.get("done"):
-                continue
-            inst_date = (t.get("id") or "").rsplit(":", 1)[-1]
-            if len(inst_date) == 10 and inst_date < today:
-                t["done"] = True
-                t["done_at"] = now_iso
-                t["auto_skipped"] = True
-                t["skipped_for"] = inst_date
-                stamp_fields(t, ["done", "done_at", "auto_skipped", "skipped_for"], now_iso)
-                skipped += 1
-
         seeds = [
             t for t in tasks
             if t.get("recurring") in {"daily", "weekly", "monthly"}
             and not t.get("deleted_at") and not t.get("recur_source")
         ]
-        if not seeds and skipped == 0:
+        if not seeds:
             write_state(state)
             return False
 
@@ -1382,15 +1369,15 @@ def ensure_recurring_today() -> bool:
             last_gen[seed_id] = today
             added += 1
 
-        if added > 0 or skipped > 0:
+        if added:
             data["tasks"] = tasks
             _atomic_write_todos(data)
 
     write_state(state)
-    if added > 0 or skipped > 0:
+    if added:
         schedule_sync()
-        print(f"[recur] generated {added} / skipped {skipped} for {today}")
-    return added > 0 or skipped > 0
+        print(f"[recur] generated {added} for {today}")
+    return added > 0
 
 
 _scheduler = None
