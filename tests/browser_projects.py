@@ -689,7 +689,7 @@ def main():
             assert page.evaluate("todayStr()") == "2026-10-16"
             assert page.locator('#groups [data-id="midnight-done"]').count() == 0
             assert page.locator('#taskTimeRange').input_value() == "near"
-            assert page.locator('#groups [data-id="midnight-due"]').count() == 0
+            assert page.locator('#groups [data-id="midnight-due"] .deadline-wrap').inner_text() == "2026/10/15"
             page.locator('#globalSettings > summary').click()
             page.locator('#taskTimeRange').select_option("overdue")
             assert page.locator('#groups [data-id="midnight-due"] .deadline-wrap').inner_text() == "2026/10/15"

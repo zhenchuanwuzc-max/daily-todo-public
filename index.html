@@ -925,7 +925,7 @@ button.milestone-title { cursor:pointer; }
     </div>
   </form>
   <div id="taskViewSettings" class="things-list-controls" hidden>
-    <label>时间范围<select id="taskTimeRange" aria-label="待办时间范围"><option value="near">近3天</option><option value="all">全部待办</option><option value="overdue">逾期待办</option><option value="undated">未设截止</option></select></label>
+    <label>时间范围<select id="taskTimeRange" aria-label="待办时间范围"><option value="near">逾期及近3天</option><option value="all">全部待办</option><option value="overdue">逾期待办</option><option value="undated">未设截止</option></select></label>
     <label>排序方式<select id="taskSort" aria-label="待办排序"><option value="deadline">按截止日期</option><option value="manual">手动排序</option></select></label>
     <span id="taskRangeHint"></span>
   </div>
@@ -1418,7 +1418,7 @@ function matchesTaskRange(t){
   if(taskTimeRange==='all')return true;
   if(taskTimeRange==='overdue')return !!date&&date<today;
   if(taskTimeRange==='undated')return !date;
-  return !!date&&date>=today&&date<=dateStrOffset(2);
+  return !!date&&date<=dateStrOffset(2);
 }
 function renderTaskControls(){
   const today=todayStr();
@@ -1429,7 +1429,7 @@ function renderTaskControls(){
   range.querySelector('[value=overdue]').textContent='逾期 ('+open.filter(t=>taskDisplayDate(t)&&taskDisplayDate(t)<today).length+')';
   range.querySelector('[value=undated]').textContent='未设截止 ('+open.filter(t=>!taskDisplayDate(t)).length+')';
   document.getElementById('taskSort').value=taskSort;
-  document.getElementById('taskRangeHint').textContent=taskTimeRange==='near'?`${today.slice(5).replace('-','/')} — ${dateStrOffset(2).slice(5).replace('-','/')} · 含今天`:'';
+  document.getElementById('taskRangeHint').textContent=taskTimeRange==='near'?`逾期及 ${today.slice(5).replace('-','/')} — ${dateStrOffset(2).slice(5).replace('-','/')}`:'';
 }
 for(const [id,update] of [['taskTimeRange',value=>{taskTimeRange=value;}],['taskSort',value=>{taskSort=value;localStorage.setItem('tracking-task-sort',value);} ]]){
   document.getElementById(id).addEventListener('change',e=>{update(e.target.value);e.target.blur();requestRender();});
@@ -1480,7 +1480,7 @@ function render() {
     "更新 " + (state.updated || "—").replace("T", " ").slice(0, 16);
 
   if (nOpen === 0 && buckets.done.length === 0 && buckets.suggest.length === 0) {
-    root.innerHTML = '<div class="empty">'+(taskTimeRange==='near'?'近3天暂无待办，可在「设置」中切换「全部待办」查看其他事项。':'当前范围暂无待办。')+'</div>';
+    root.innerHTML = '<div class="empty">'+(taskTimeRange==='near'?'逾期及近3天暂无待办，可在「设置」中切换「全部待办」查看其他事项。':'当前范围暂无待办。')+'</div>';
   }
 
   // 弹窗打开时同步刷新模板列表，保留添加表单。
@@ -2367,7 +2367,9 @@ function renderTask(t, {projectView=false}={}) {
   const dateWrap=el('span','deadline-wrap');
   const dateKey=t.id+':deadline',dateDraft=fieldDrafts.get(dateKey);
   const deadlineValue=dateDraft?.value??t.deadline??'';
-  const deadline=btn(deadlineValue?deadlineValue.replaceAll('-','/'):'设置日期',()=>{
+  const repeatDate=!deadlineValue&&t.recur_source?taskDisplayDate(t):'';
+  const dateLabel=deadlineValue?deadlineValue.replaceAll('-','/'):repeatDate?'原定 '+repeatDate.slice(5).replace('-','/'):'设置日期';
+  const deadline=btn(dateLabel,()=>{
     openDatePicker(deadline,fieldDrafts.get(dateKey)?.value??t.deadline??'',async value=>{
       const draft={value,failed:false};fieldDrafts.set(dateKey,draft);
       const ok=await patchTask(t.id,{deadline:value},()=>{if(fieldDrafts.get(dateKey)===draft)fieldDrafts.delete(dateKey);});
@@ -2378,7 +2380,7 @@ function renderTask(t, {projectView=false}={}) {
   deadline.dataset.field='deadline';deadline.setAttribute('aria-label','截止日期');deadline.setAttribute('aria-haspopup','dialog');deadline.setAttribute('aria-expanded','false');
   deadline.classList.toggle('save-failed',!!dateDraft?.failed);
   dateWrap.classList.toggle('empty-date',!deadlineValue);
-  deadline.title='截止日期 · '+(deadlineValue||'未设截止');
+  deadline.title=repeatDate?'重复任务原定日期 · '+repeatDate:'截止日期 · '+(deadlineValue||'未设截止');
   dateWrap.append(deadline);
   let association,associationField;
   if(!projectView) {

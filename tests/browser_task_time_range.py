@@ -28,7 +28,7 @@ def main():
                 def settle():page.wait_for_function('mutationCount===0 && !renderPending')
                 assert page.locator('#taskTimeRange').input_value()=='near'
                 assert page.locator('#taskSort').input_value()=='deadline'
-                assert ids()==['d0','recurring','d1','d2'],ids()
+                assert ids()==['late','d0','recurring','d1','d2'],ids()
                 assert page.locator('#group-P1 .drag-handle').count()==0
                 assert page.locator('#groups [data-id=d0] .association-project-label').inner_text()=='项目'
                 association=page.locator('#groups [data-id=d0] .association')
@@ -52,16 +52,16 @@ def main():
                 assert not page.locator('#taskViewSettings').is_visible()
                 assert page.locator('#projectDetail li.inline-task').count()==6
                 assert '1/7' in page.locator('#projectDetail .project-progress').inner_text()
-                page.locator('#thingsTab').click();assert ids()==['d0','recurring','d1','d2']
-                page.reload();page.locator('#group-P1').wait_for();assert ids()==['d0','recurring','d1','d2']
+                page.locator('#thingsTab').click();assert ids()==['late','d0','recurring','d1','d2']
+                page.reload();page.locator('#group-P1').wait_for();assert ids()==['late','d0','recurring','d1','d2']
                 assert Path(server.DATA_FILE).read_bytes()==before,'Filters must not migrate or overwrite any data'
                 # Window follows Beijing date rollover even with unchanged data revision.
                 tomorrow=(today+timedelta(days=1)).isoformat()
                 page.evaluate('(value)=>{todayStr=()=>value;requestRender();}',tomorrow)
                 assert page.locator('#taskTimeRange').input_value()=='near'
-                assert ids()==['d1','d2','d3'],ids()
+                assert ids()==['late','d0','recurring','d1','d2','d3'],ids()
                 assert not errors,errors
-                print(f'PASS {engine}: default today+2/deadline sort/manual mode/overdue+undated access/recurring/today completed/project progress/reload/midnight/zero data writes')
+                print(f'PASS {engine}: overdue and next three days/ordinary and recurring carryover at midnight/filters/project progress/reload/zero data writes')
                 browser.close()
         finally:httpd.shutdown();httpd.server_close()
 if __name__=='__main__':main()

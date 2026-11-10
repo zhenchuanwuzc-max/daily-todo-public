@@ -71,24 +71,23 @@ class RecurringTestCase(unittest.TestCase):
             },
         )
 
-    def test_ensure_auto_skips_an_older_unfinished_instance(self):
+    def test_ensure_keeps_an_older_unfinished_instance_open(self):
+        old = {
+            "id": "recur:seed:2026-07-06",
+            "text": "weekly",
+            "done": False,
+            "recur_source": "seed",
+        }
         self.write_tasks([
             {"id": "seed", "text": "weekly", "recurring": "weekly", "recur_weekday": 1},
-            {
-                "id": "recur:seed:2026-07-06",
-                "text": "weekly",
-                "done": False,
-                "recur_source": "seed",
-            },
+            old,
         ])
         with patch.object(server, "today_str", return_value="2026-07-13"):
-            server.ensure_recurring_today()
-        old = next(
-            item for item in self.read_tasks()
-            if item["id"] == "recur:seed:2026-07-06"
-        )
-        self.assertTrue(old["done"])
-        self.assertTrue(old["auto_skipped"])
+            self.assertTrue(server.ensure_recurring_today())
+            self.assertFalse(server.ensure_recurring_today())
+        instances = {item["id"]: item for item in self.read_tasks() if item.get("recur_source")}
+        self.assertEqual(instances[old["id"]], old)
+        self.assertEqual(set(instances), {old["id"], "recur:seed:2026-07-13"})
 
     def test_add_recurring_seed_validates_schedule_fields(self):
         self.write_tasks([])
