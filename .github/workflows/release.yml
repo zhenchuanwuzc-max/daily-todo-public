@@ -33,6 +33,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install \
             'setuptools==58.0.4' 'wheel' \
+            'certifi==2026.10.23' \
             'py2app==0.28.9' 'pywebview==6.2.1' \
             'APScheduler==3.11.3' 'tzlocal==5.3.1' \
             'pyobjc-core==11.1' \
@@ -50,8 +51,10 @@ jobs:
             TODO_DISABLE_SYNC=1 TODO_DISABLE_UPDATE=1 \
             python -m unittest discover -s tests -v
           test "$(cat VERSION)" = "${GITHUB_REF_NAME#v}"
-          python setup.py py2app
+          ca_file="$(python -m certifi)"
+          SSL_CERT_FILE="$ca_file" SSL_CERT_DIR="$sandbox/no-cert-directory" python setup.py py2app
           app='dist/每日待办.app'
+          cmp "$ca_file" "$app/Contents/Resources/openssl.ca/cacert.pem"
           test "$(uname -m)" = '${{ matrix.arch }}'
           python scripts/merge-universal.py verify "$app" --source . \
             --version "${GITHUB_REF_NAME#v}" --arch '${{ matrix.arch }}'
